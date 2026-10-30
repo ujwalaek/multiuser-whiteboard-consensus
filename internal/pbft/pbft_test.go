@@ -13,15 +13,18 @@ import (
 )
 
 func cluster(t *testing.T, port int) (*Node, []*testnet.Replica) {
-	var primary *Node
+	p, _, rs := clusterNodes(t, port)
+	return p, rs
+}
+
+func clusterNodes(t *testing.T, port int) (*Node, []*Node, []*testnet.Replica) {
+	var nodes []*Node // replicas register in order r0, r1, ...
 	rs := testnet.Start(t, 4, port, func(r *testnet.Replica, conns map[string]*grpc.ClientConn, gs *grpc.Server) {
-		nd := New(r.ID, 4, conns, r.Inj, r.OnCommit)
+		nd := New(r.ID, 4, conns, r.Auth, r.Inj, r.OnCommit)
 		pb.RegisterPbftServer(gs, nd)
-		if r.ID == "r0" {
-			primary = nd
-		}
+		nodes = append(nodes, nd)
 	})
-	return primary, rs
+	return nodes[0], nodes, rs
 }
 
 func op(i int) []byte { return []byte(fmt.Sprintf(`{"kind":"draw","id":"s%d","shape":{"color":"#0000ff"}}`, i)) }
@@ -63,6 +66,45 @@ func TestEquivocatingBackupIsOutvoted(t *testing.T) {
 	p.Propose(op(1))
 	testnet.Eventually(t, 3*time.Second, "honest replicas commit", func() bool { return committedOn(rs, 1, "r1") == 3 })
 	testnet.Agree(t, rs, "r1")
+}
+
+// The signed pre-prepares that replicas forward in their prepares let honest replicas
+// hold proof, checkable by anyone with the public keys, that the primary equivocated.
+func TestEquivocatingPrimaryLeavesSignedEvidence(t *testing.T) {
+	p, nodes, rs := clusterNodes(t, 17140)
+	rs[0].Inj.Set(fault.Equivocate, 0)
+	p.Propose(op(1))
+	testnet.Eventually(t, 3*time.Second, "every honest replica holds evidence", func() bool {
+		for _, nd := range nodes[1:] {
+			if len(nd.Evidence()) == 0 {
+				return false
+			}
+		}
+		return true
+	})
+	outsider := rs[3].Auth // verifies with public keys only
+	for _, nd := range nodes[1:] {
+		for _, e := range nd.Evidence() {
+			if e.Accused != "r0" || !e.Check(outsider) {
+				t.Errorf("%s holds evidence that does not verify: accused %s", nd.id, e.Accused)
+			}
+		}
+	}
+}
+
+// An honest primary must never be accused, even when a backup lies.
+func TestNoEvidenceAgainstHonestPrimary(t *testing.T) {
+	p, nodes, rs := clusterNodes(t, 17150)
+	rs[1].Inj.Set(fault.Equivocate, 0)
+	for i := 1; i <= 3; i++ {
+		p.Propose(op(i))
+	}
+	testnet.Eventually(t, 3*time.Second, "honest replicas commit", func() bool { return committedOn(rs, 3, "r1") == 3 })
+	for _, nd := range nodes {
+		if ev := nd.Evidence(); len(ev) > 0 {
+			t.Errorf("%s accused the honest primary: %+v", nd.id, ev)
+		}
+	}
 }
 
 // Scenario S1: an equivocating primary cannot make honest replicas disagree; without view change it only stalls.

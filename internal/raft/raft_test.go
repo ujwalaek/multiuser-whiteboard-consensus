@@ -15,7 +15,7 @@ import (
 func cluster(t *testing.T, n, port int) ([]*Node, []*testnet.Replica) {
 	var nodes []*Node // replicas register in order r0, r1, ...
 	rs := testnet.Start(t, n, port, func(r *testnet.Replica, conns map[string]*grpc.ClientConn, gs *grpc.Server) {
-		nd := New(r.ID, n, conns, r.Inj, r.OnCommit, false)
+		nd := New(r.ID, n, conns, r.Auth, r.Inj, r.OnCommit, false)
 		pb.RegisterRaftServer(gs, nd)
 		nodes = append(nodes, nd)
 	})

@@ -25,9 +25,14 @@ func main() {
 	n := flag.Int("n", 4, "cluster size")
 	proto := flag.String("proto", "raft", "raft|pbft")
 	fast := flag.Bool("fast", false, "raft: short election timeout (wins first election)")
+	keys := flag.String("keys", "keys", "directory written by cmd/keygen")
 	flag.Parse()
 
 	rid := fmt.Sprintf("r%d", *id)
+	auth, err := common.LoadAuth(*keys, rid)
+	if err != nil {
+		log.Fatalf("loading keys (run: go run ./cmd/keygen -n %d): %v", *n, err)
+	}
 	inj := fault.New()
 	srv := &server.Server{ID: rid, Proto: *proto, Inj: inj}
 	srv.Init()
@@ -43,12 +48,12 @@ func main() {
 
 	switch *proto {
 	case "raft":
-		nd := raft.New(rid, *n, conns, inj, srv.OnCommit, *fast)
+		nd := raft.New(rid, *n, conns, auth, inj, srv.OnCommit, *fast)
 		pb.RegisterRaftServer(gs, nd)
 		srv.Cons = nd
 		nd.Run()
 	case "pbft":
-		nd := pbft.New(rid, *n, conns, inj, srv.OnCommit)
+		nd := pbft.New(rid, *n, conns, auth, inj, srv.OnCommit)
 		pb.RegisterPbftServer(gs, nd)
 		srv.Cons = nd
 	default:

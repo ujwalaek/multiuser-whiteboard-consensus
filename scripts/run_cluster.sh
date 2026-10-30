@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 mkdir -p bin logs
 go build -o bin/replica ./cmd/replica
 go build -o bin/checker ./cmd/checker
+go run ./cmd/keygen -n $N -dir keys 2>/dev/null   # fresh key pair per replica for every run
 for ((i=0;i<N;i++)); do
   FAST=""; [ "$PROTO" = raft ] && [ $i -eq 0 ] && FAST="-fast"
   ./bin/replica -id $i -n $N -proto $PROTO $FAST > logs/r$i.log 2>&1 &

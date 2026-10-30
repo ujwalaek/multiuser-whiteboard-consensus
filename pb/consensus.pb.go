@@ -80,7 +80,7 @@ type VoteReq struct {
 	LastIndex     uint64                 `protobuf:"varint,3,opt,name=last_index,json=lastIndex,proto3" json:"last_index,omitempty"`
 	LastTerm      uint64                 `protobuf:"varint,4,opt,name=last_term,json=lastTerm,proto3" json:"last_term,omitempty"`
 	Sender        string                 `protobuf:"bytes,5,opt,name=sender,proto3" json:"sender,omitempty"`
-	Mac           []byte                 `protobuf:"bytes,6,opt,name=mac,proto3" json:"mac,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,6,opt,name=sig,proto3" json:"sig,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,9 +150,9 @@ func (x *VoteReq) GetSender() string {
 	return ""
 }
 
-func (x *VoteReq) GetMac() []byte {
+func (x *VoteReq) GetSig() []byte {
 	if x != nil {
-		return x.Mac
+		return x.Sig
 	}
 	return nil
 }
@@ -218,7 +218,7 @@ type AppendReq struct {
 	Entries       []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
 	LeaderCommit  uint64                 `protobuf:"varint,6,opt,name=leader_commit,json=leaderCommit,proto3" json:"leader_commit,omitempty"`
 	Sender        string                 `protobuf:"bytes,7,opt,name=sender,proto3" json:"sender,omitempty"`
-	Mac           []byte                 `protobuf:"bytes,8,opt,name=mac,proto3" json:"mac,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,8,opt,name=sig,proto3" json:"sig,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -302,9 +302,9 @@ func (x *AppendReq) GetSender() string {
 	return ""
 }
 
-func (x *AppendReq) GetMac() []byte {
+func (x *AppendReq) GetSig() []byte {
 	if x != nil {
-		return x.Mac
+		return x.Sig
 	}
 	return nil
 }
@@ -376,7 +376,7 @@ type PrePrepareMsg struct {
 	Digest        []byte                 `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
 	Op            []byte                 `protobuf:"bytes,4,opt,name=op,proto3" json:"op,omitempty"`
 	Sender        string                 `protobuf:"bytes,5,opt,name=sender,proto3" json:"sender,omitempty"`
-	Mac           []byte                 `protobuf:"bytes,6,opt,name=mac,proto3" json:"mac,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,6,opt,name=sig,proto3" json:"sig,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -446,20 +446,23 @@ func (x *PrePrepareMsg) GetSender() string {
 	return ""
 }
 
-func (x *PrePrepareMsg) GetMac() []byte {
+func (x *PrePrepareMsg) GetSig() []byte {
 	if x != nil {
-		return x.Mac
+		return x.Sig
 	}
 	return nil
 }
 
 type PhaseMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	View          uint64                 `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
-	Seq           uint64                 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
-	Digest        []byte                 `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
-	Sender        string                 `protobuf:"bytes,4,opt,name=sender,proto3" json:"sender,omitempty"`
-	Mac           []byte                 `protobuf:"bytes,5,opt,name=mac,proto3" json:"mac,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	View   uint64                 `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
+	Seq    uint64                 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
+	Digest []byte                 `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
+	Sender string                 `protobuf:"bytes,4,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sig    []byte                 `protobuf:"bytes,5,opt,name=sig,proto3" json:"sig,omitempty"`
+	// On a prepare: the primary's signed pre-prepare this replica received, so peers
+	// holding a different one for the same (view, seq) can prove the primary equivocated.
+	Proof         *PrePrepareMsg `protobuf:"bytes,6,opt,name=proof,proto3" json:"proof,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -522,9 +525,16 @@ func (x *PhaseMsg) GetSender() string {
 	return ""
 }
 
-func (x *PhaseMsg) GetMac() []byte {
+func (x *PhaseMsg) GetSig() []byte {
 	if x != nil {
-		return x.Mac
+		return x.Sig
+	}
+	return nil
+}
+
+func (x *PhaseMsg) GetProof() *PrePrepareMsg {
+	if x != nil {
+		return x.Proof
 	}
 	return nil
 }
@@ -580,7 +590,7 @@ const file_pb_consensus_proto_rawDesc = "" +
 	"last_index\x18\x03 \x01(\x04R\tlastIndex\x12\x1b\n" +
 	"\tlast_term\x18\x04 \x01(\x04R\blastTerm\x12\x16\n" +
 	"\x06sender\x18\x05 \x01(\tR\x06sender\x12\x10\n" +
-	"\x03mac\x18\x06 \x01(\fR\x03mac\"8\n" +
+	"\x03sig\x18\x06 \x01(\fR\x03sig\"8\n" +
 	"\bVoteResp\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\x12\x18\n" +
 	"\agranted\x18\x02 \x01(\bR\agranted\"\xea\x01\n" +
@@ -593,7 +603,7 @@ const file_pb_consensus_proto_rawDesc = "" +
 	"\aentries\x18\x05 \x03(\v2\f.wb.LogEntryR\aentries\x12#\n" +
 	"\rleader_commit\x18\x06 \x01(\x04R\fleaderCommit\x12\x16\n" +
 	"\x06sender\x18\a \x01(\tR\x06sender\x12\x10\n" +
-	"\x03mac\x18\b \x01(\fR\x03mac\"[\n" +
+	"\x03sig\x18\b \x01(\fR\x03sig\"[\n" +
 	"\n" +
 	"AppendResp\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\x12\x18\n" +
@@ -606,13 +616,14 @@ const file_pb_consensus_proto_rawDesc = "" +
 	"\x06digest\x18\x03 \x01(\fR\x06digest\x12\x0e\n" +
 	"\x02op\x18\x04 \x01(\fR\x02op\x12\x16\n" +
 	"\x06sender\x18\x05 \x01(\tR\x06sender\x12\x10\n" +
-	"\x03mac\x18\x06 \x01(\fR\x03mac\"r\n" +
+	"\x03sig\x18\x06 \x01(\fR\x03sig\"\x9b\x01\n" +
 	"\bPhaseMsg\x12\x12\n" +
 	"\x04view\x18\x01 \x01(\x04R\x04view\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12\x16\n" +
 	"\x06digest\x18\x03 \x01(\fR\x06digest\x12\x16\n" +
 	"\x06sender\x18\x04 \x01(\tR\x06sender\x12\x10\n" +
-	"\x03mac\x18\x05 \x01(\fR\x03mac\"\x05\n" +
+	"\x03sig\x18\x05 \x01(\fR\x03sig\x12'\n" +
+	"\x05proof\x18\x06 \x01(\v2\x11.wb.PrePrepareMsgR\x05proof\"\x05\n" +
 	"\x03Ack2`\n" +
 	"\x04Raft\x12(\n" +
 	"\vRequestVote\x12\v.wb.VoteReq\x1a\f.wb.VoteResp\x12.\n" +
@@ -648,21 +659,22 @@ var file_pb_consensus_proto_goTypes = []any{
 }
 var file_pb_consensus_proto_depIdxs = []int32{
 	0, // 0: wb.AppendReq.entries:type_name -> wb.LogEntry
-	1, // 1: wb.Raft.RequestVote:input_type -> wb.VoteReq
-	3, // 2: wb.Raft.AppendEntries:input_type -> wb.AppendReq
-	5, // 3: wb.Pbft.PrePrepare:input_type -> wb.PrePrepareMsg
-	6, // 4: wb.Pbft.Prepare:input_type -> wb.PhaseMsg
-	6, // 5: wb.Pbft.Commit:input_type -> wb.PhaseMsg
-	2, // 6: wb.Raft.RequestVote:output_type -> wb.VoteResp
-	4, // 7: wb.Raft.AppendEntries:output_type -> wb.AppendResp
-	7, // 8: wb.Pbft.PrePrepare:output_type -> wb.Ack
-	7, // 9: wb.Pbft.Prepare:output_type -> wb.Ack
-	7, // 10: wb.Pbft.Commit:output_type -> wb.Ack
-	6, // [6:11] is the sub-list for method output_type
-	1, // [1:6] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	5, // 1: wb.PhaseMsg.proof:type_name -> wb.PrePrepareMsg
+	1, // 2: wb.Raft.RequestVote:input_type -> wb.VoteReq
+	3, // 3: wb.Raft.AppendEntries:input_type -> wb.AppendReq
+	5, // 4: wb.Pbft.PrePrepare:input_type -> wb.PrePrepareMsg
+	6, // 5: wb.Pbft.Prepare:input_type -> wb.PhaseMsg
+	6, // 6: wb.Pbft.Commit:input_type -> wb.PhaseMsg
+	2, // 7: wb.Raft.RequestVote:output_type -> wb.VoteResp
+	4, // 8: wb.Raft.AppendEntries:output_type -> wb.AppendResp
+	7, // 9: wb.Pbft.PrePrepare:output_type -> wb.Ack
+	7, // 10: wb.Pbft.Prepare:output_type -> wb.Ack
+	7, // 11: wb.Pbft.Commit:output_type -> wb.Ack
+	7, // [7:12] is the sub-list for method output_type
+	2, // [2:7] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_pb_consensus_proto_init() }

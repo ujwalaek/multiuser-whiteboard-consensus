@@ -19,10 +19,11 @@ import (
 
 // Replica is what each test cluster member records: its fault injector and the ops it committed, in order.
 type Replica struct {
-	ID  string
-	Inj *fault.Injector
-	mu  sync.Mutex
-	log map[uint64][]byte
+	ID   string
+	Inj  *fault.Injector
+	Auth *common.Auth
+	mu   sync.Mutex
+	log  map[uint64][]byte
 }
 
 func (r *Replica) OnCommit(i uint64, op []byte) {
@@ -46,9 +47,11 @@ func (r *Replica) Committed() map[uint64][]byte {
 func Start(t *testing.T, n, basePort int, register func(r *Replica, conns map[string]*grpc.ClientConn, gs *grpc.Server)) []*Replica {
 	t.Helper()
 	common.BasePort = basePort
+	privs, pubs := common.GenerateKeys(n)
 	rs := make([]*Replica, n)
 	for i := 0; i < n; i++ {
-		r := &Replica{ID: fmt.Sprintf("r%d", i), Inj: fault.New(), log: map[uint64][]byte{}}
+		id := fmt.Sprintf("r%d", i)
+		r := &Replica{ID: id, Inj: fault.New(), Auth: common.NewAuth(id, privs[id], pubs), log: map[uint64][]byte{}}
 		inj := r.Inj
 		gs := grpc.NewServer(grpc.UnaryInterceptor(
 			func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {

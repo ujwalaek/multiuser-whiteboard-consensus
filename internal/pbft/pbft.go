@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,6 +22,8 @@ type slot struct {
 	op, digest []byte
 	pre, sentC, done bool
 	prep, comm map[string]string // sender -> hex digest they claim
+	known      *pb.PrePrepareMsg // first validly signed pre-prepare seen for this seq (own or forwarded)
+	accused    bool              // evidence already recorded for this seq
 }
 
 type Node struct {
@@ -38,11 +41,31 @@ type Node struct {
 	auth     *common.Auth
 	inj      *fault.Injector
 	onCommit common.CommitFn
+	evidence []common.Evidence
 }
 
-func New(id string, n int, conns map[string]*grpc.ClientConn, inj *fault.Injector, cb common.CommitFn) *Node {
+func New(id string, n int, conns map[string]*grpc.ClientConn, auth *common.Auth, inj *fault.Injector, cb common.CommitFn) *Node {
 	return &Node{id: id, primary: "r0", n: n, f: (n - 1) / 3, exec: 1, slots: map[uint64]*slot{},
-		conns: conns, auth: common.NewAuth(id), inj: inj, onCommit: cb}
+		conns: conns, auth: auth, inj: inj, onCommit: cb}
+}
+
+// observe records m, a pre-prepare already verified as signed by the primary, and
+// stores evidence if the primary signed a different one for the same slot. caller holds mu.
+func (n *Node) observe(m *pb.PrePrepareMsg, reporter string) {
+	s := n.slot(m.Seq)
+	switch {
+	case s.known == nil:
+		s.known = m
+	case !s.accused && !bytes.Equal(s.known.Digest, m.Digest):
+		s.accused = true
+		n.evidence = append(n.evidence, common.Evidence{Accused: n.primary, Reporter: reporter, A: s.known, B: m})
+	}
+}
+
+func (n *Node) Evidence() []common.Evidence {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]common.Evidence(nil), n.evidence...)
 }
 
 func (n *Node) slot(s uint64) *slot { // caller holds mu
@@ -89,10 +112,8 @@ func (n *Node) Propose(op []byte) (string, error) {
 			}
 			dd := sha256.Sum256(o)
 			m := &pb.PrePrepareMsg{View: n.view, Seq: seq, Digest: dd[:], Op: o, Sender: n.id}
-			n.auth.Sign(p, m)
-			ctx, cancel := common.Ctx()
-			defer cancel()
-			pb.NewPbftClient(c).PrePrepare(ctx, m)
+			n.auth.Sign(m)
+			send(func(ctx context.Context) error { _, err := pb.NewPbftClient(c).PrePrepare(ctx, m); return err })
 		}(p, c)
 	}
 	return n.id, nil
@@ -108,13 +129,15 @@ func (n *Node) PrePrepare(_ context.Context, m *pb.PrePrepareMsg) (*pb.Ack, erro
 	n.mu.Lock()
 	s := n.slot(m.Seq)
 	if s.pre && !bytes.Equal(s.digest, m.Digest) {
+		n.observe(m, n.id)
 		n.mu.Unlock()
 		return nil, status.Error(codes.AlreadyExists, "conflicting pre-prepare") // primary equivocation detected
 	}
 	s.op, s.digest, s.pre = m.Op, m.Digest, true
 	s.prep[n.id] = hex.EncodeToString(m.Digest)
+	n.observe(m, n.id)
 	n.mu.Unlock()
-	n.bcast(true, m.Seq, m.Digest)
+	n.bcast(true, m.Seq, m.Digest, m)
 	n.advance(m.Seq)
 	return &pb.Ack{}, nil
 }
@@ -126,8 +149,14 @@ func (n *Node) phase(m *pb.PhaseMsg, prepare bool) (*pb.Ack, error) {
 	if !n.auth.Verify(m.Sender, m) || m.View != n.view {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
 	}
+	pf := m.Proof // a forwarded pre-prepare counts as evidence only if the primary really signed it
+	okProof := prepare && pf != nil && pf.Sender == n.primary && pf.View == m.View && pf.Seq == m.Seq &&
+		n.auth.Verify(n.primary, pf)
 	n.mu.Lock()
 	s := n.slot(m.Seq)
+	if okProof {
+		n.observe(pf, m.Sender)
+	}
 	if prepare {
 		s.prep[m.Sender] = hex.EncodeToString(m.Digest)
 	} else {
@@ -138,23 +167,42 @@ func (n *Node) phase(m *pb.PhaseMsg, prepare bool) (*pb.Ack, error) {
 	return &pb.Ack{}, nil
 }
 
-func (n *Node) bcast(prepare bool, seq uint64, d []byte) {
+// bcast sends a prepare (carrying proof, the primary's signed pre-prepare) or a commit to every peer.
+func (n *Node) bcast(prepare bool, seq uint64, d []byte, proof *pb.PrePrepareMsg) {
 	for p, c := range n.conns {
 		go func(p string, c *grpc.ClientConn) {
 			if n.inj.Drop() {
 				return
 			}
-			m := &pb.PhaseMsg{View: n.view, Seq: seq, Digest: n.digestFor(p, d), Sender: n.id}
-			n.auth.Sign(p, m)
-			ctx, cancel := common.Ctx()
-			defer cancel()
+			m := &pb.PhaseMsg{View: n.view, Seq: seq, Digest: n.digestFor(p, d), Sender: n.id, Proof: proof}
+			n.auth.Sign(m)
 			cl := pb.NewPbftClient(c)
-			if prepare {
-				cl.Prepare(ctx, m)
-			} else {
-				cl.Commit(ctx, m)
-			}
+			send(func(ctx context.Context) error {
+				var err error
+				if prepare {
+					_, err = cl.Prepare(ctx, m)
+				} else {
+					_, err = cl.Commit(ctx, m)
+				}
+				return err
+			})
 		}(p, c)
+	}
+}
+
+// send makes one RPC, retrying a few times if it timed out or the peer was unreachable.
+// PBFT has no heartbeats to repair a lost message (Raft's AppendEntries does), so without
+// this one slow connection setup can stall a slot forever. A peer's deliberate rejection
+// is not retried, and the fault injector's drops happen before send, so they stay dropped.
+func send(call func(ctx context.Context) error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		ctx, cancel := common.Ctx()
+		err := call(ctx)
+		cancel()
+		if c := status.Code(err); c != codes.DeadlineExceeded && c != codes.Unavailable {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -205,7 +253,7 @@ func (n *Node) advance(seq uint64) {
 	}
 	n.mu.Unlock()
 	if sendCommit {
-		n.bcast(false, seq, d)
+		n.bcast(false, seq, d, nil)
 	}
 	if len(out) > 0 {
 		for _, e := range out {

@@ -47,9 +47,9 @@ type Node struct {
 	done      chan struct{}
 }
 
-func New(id string, n int, conns map[string]*grpc.ClientConn, inj *fault.Injector,
+func New(id string, n int, conns map[string]*grpc.ClientConn, auth *common.Auth, inj *fault.Injector,
 	cb common.CommitFn, fast bool) *Node {
-	nd := &Node{id: id, n: n, conns: conns, auth: common.NewAuth(id), inj: inj, onCommit: cb,
+	nd := &Node{id: id, n: n, conns: conns, auth: auth, inj: inj, onCommit: cb,
 		log: []*pb.LogEntry{{}}, next: map[string]uint64{}, match: map[string]uint64{}, fast: fast,
 		done: make(chan struct{})}
 	nd.resetTimer()
@@ -120,7 +120,7 @@ func (n *Node) startElection() {
 				return
 			}
 			req := &pb.VoteReq{Term: term, Candidate: n.id, LastIndex: li, LastTerm: lt, Sender: n.id}
-			n.auth.Sign(p, req)
+			n.auth.Sign(req)
 			ctx, cancel := common.Ctx()
 			defer cancel()
 			resp, err := pb.NewRaftClient(c).RequestVote(ctx, req)
@@ -148,7 +148,7 @@ func (n *Node) startElection() {
 
 func (n *Node) RequestVote(_ context.Context, r *pb.VoteReq) (*pb.VoteResp, error) {
 	if !n.auth.Verify(r.Sender, r) {
-		return nil, status.Error(codes.Unauthenticated, "bad mac")
+		return nil, status.Error(codes.Unauthenticated, "bad signature")
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -196,7 +196,7 @@ func (n *Node) replicate(p string) {
 		}
 	}
 	req.Entries = entries
-	n.auth.Sign(p, req)
+	n.auth.Sign(req)
 
 	ctx, cancel := common.Ctx()
 	defer cancel()
@@ -243,7 +243,7 @@ func (n *Node) advanceCommit() { // caller holds mu
 
 func (n *Node) AppendEntries(_ context.Context, r *pb.AppendReq) (*pb.AppendResp, error) {
 	if !n.auth.Verify(r.Sender, r) {
-		return nil, status.Error(codes.Unauthenticated, "bad mac")
+		return nil, status.Error(codes.Unauthenticated, "bad signature")
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()

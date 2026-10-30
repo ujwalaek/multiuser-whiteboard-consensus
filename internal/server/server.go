@@ -72,6 +72,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/status", s.status)
 	mux.HandleFunc("/admin/log", s.logH)
 	mux.HandleFunc("/admin/fault", s.faultH)
+	mux.HandleFunc("/admin/evidence", s.evidenceH)
 	return cors(mux)
 }
 
@@ -151,6 +152,15 @@ func (s *Server) logH(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	json.NewEncoder(w).Encode(s.log)
+}
+
+// GET /admin/evidence: signed proof of equivocation this replica has collected ([] for Raft).
+func (s *Server) evidenceH(w http.ResponseWriter, r *http.Request) {
+	ev := []common.Evidence{}
+	if src, ok := s.Cons.(common.EvidenceSource); ok {
+		ev = append(ev, src.Evidence()...)
+	}
+	json.NewEncoder(w).Encode(ev)
 }
 
 // POST /admin/fault?mode=none|crash|omit|equivocate&p=0.3

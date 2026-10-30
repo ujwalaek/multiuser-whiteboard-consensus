@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"wb/internal/common"
 	"wb/internal/server"
 )
 
@@ -28,7 +29,7 @@ func get(url string, v any) error {
 func check(urls []string) bool {
 	seen := map[uint64]map[string][]string{} // index -> opHash -> replicas
 	heads := map[uint64]map[string][]string{} // index -> ledger hash -> replicas
-	bad := false
+	bad, checked := false, 0
 	for _, u := range urls {
 		var st struct{ ID, Fault string }
 		if get(u+"/admin/status", &st) != nil {
@@ -43,6 +44,7 @@ func check(urls []string) bool {
 		if get(u+"/admin/log", &lg) != nil {
 			continue
 		}
+		checked++
 		if i := server.VerifyChain(lg); i != 0 {
 			bad = true
 			fmt.Printf("LEDGER CORRUPT on %s: hash chain breaks at index %d\n", st.ID, i)
@@ -70,10 +72,43 @@ func check(urls []string) bool {
 			break
 		}
 	}
+	if checked == 0 { // nothing to compare is not evidence of safety
+		fmt.Println("NO HONEST REPLICA REACHABLE: nothing checked")
+		return true
+	}
 	if !bad {
-		fmt.Printf("SAFETY OK: honest replicas agree on all %d committed indices\n", len(idxs))
+		fmt.Printf("SAFETY OK: %d honest replicas agree on all %d committed indices\n", checked, len(idxs))
 	}
 	return bad
+}
+
+// evidence fetches each replica's equivocation evidence and re-checks every signature
+// itself, so a replica cannot frame another: only the accused's own key could sign both messages.
+func evidence(urls []string, verify *common.Auth) {
+	holders := map[string][]string{} // verified proof, per accused/view/seq -> replicas holding it
+	var keys []string
+	for _, u := range urls {
+		var st struct{ ID string }
+		var ev []common.Evidence
+		if get(u+"/admin/status", &st) != nil || get(u+"/admin/evidence", &ev) != nil {
+			continue
+		}
+		for _, e := range ev {
+			if !e.Check(verify) {
+				fmt.Printf("INVALID PROOF from %s against %s (ignored)\n", st.ID, e.Accused)
+				continue
+			}
+			k := fmt.Sprintf("%s signed two different pre-prepares for view %d seq %d", e.Accused, e.A.View, e.A.Seq)
+			if holders[k] == nil {
+				keys = append(keys, k)
+			}
+			holders[k] = append(holders[k], st.ID)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Printf("EQUIVOCATION PROOF VERIFIED: %s (held by %s)\n", k, strings.Join(holders[k], ", "))
+	}
 }
 
 func add(m map[uint64]map[string][]string, i uint64, k, id string) {
@@ -86,10 +121,19 @@ func add(m map[uint64]map[string][]string, i uint64, k, id string) {
 func main() {
 	reps := flag.String("replicas", "", "comma-separated base URLs")
 	once := flag.Bool("once", false, "check once; exit 1 on violation")
+	keys := flag.String("keys", "keys", "directory holding pub.json")
 	flag.Parse()
 	urls := strings.Split(*reps, ",")
+	pubs, err := common.LoadPublic(*keys)
+	if err != nil {
+		fmt.Println("no public keys, skipping evidence check:", err)
+	}
+	verify := common.NewAuth("checker", nil, pubs)
 	for {
 		bad := check(urls)
+		if pubs != nil {
+			evidence(urls, verify)
+		}
 		if *once {
 			if bad {
 				os.Exit(1)
