@@ -1,0 +1,107 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Replicated Whiteboard</title>
+<style>
+  body { font-family: sans-serif; margin: 8px }
+  #bar { display: flex; gap: 10px; align-items: center; margin-bottom: 6px }
+  svg { border: 1px solid #888; width: 100%; height: 70vh; background: #fff; touch-action: none }
+  button.on { background: #cde }
+</style>
+<div id="bar">
+  <b id="who"></b>
+  <button data-t="draw" class="on">Draw</button>
+  <button data-t="erase">Erase</button>
+  <button data-t="move">Move</button>
+  <input type="color" id="col" value="#0000ff">
+  <span id="info"></span>
+</div>
+<svg id="board"></svg>
+<script>
+const R = Number(location.port) - 8000;           // replica this page is served from
+const base = i => `http://${location.hostname}:${8000 + i}`;
+const cid = 'c' + Math.random().toString(36).slice(2, 7);
+const board = document.getElementById('board');
+const els = new Map();
+let clock = 0, tool = 'draw', last = 0;
+
+document.getElementById('who').textContent = 'replica r' + R;
+document.querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
+  tool = b.dataset.t;
+  document.querySelectorAll('button[data-t]').forEach(x => x.classList.toggle('on', x === b));
+});
+
+// ---- receive committed ops (the only way the canvas changes) ----
+const ws = new WebSocket(`ws://${location.host}/ws`);
+ws.onmessage = ev => {
+  const e = JSON.parse(ev.data), op = e.op;
+  clock = Math.max(clock, op.lamport || 0) + 1;           // Lamport receive rule
+  if (!e.dup) apply(op);                                  // a retried request is in the ledger once more but drawn once
+  last = e.index;
+  document.getElementById('info').textContent =
+    `committed=${last}  lamport=${clock}  ledger-head=${e.hash.slice(0, 12)}`;
+};
+
+function apply(op) {
+  if (op.kind === 'draw') {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    el.setAttribute('points', op.shape.points.map(p => p.join(',')).join(' '));
+    el.setAttribute('stroke', op.shape.color);
+    el.setAttribute('stroke-width', 3);
+    el.setAttribute('fill', 'none');
+    el.dataset.id = op.id; el.dataset.dx = 0; el.dataset.dy = 0;
+    board.appendChild(el); els.set(op.id, el);
+  } else if (op.kind === 'erase') {
+    els.get(op.target)?.remove(); els.delete(op.target);
+  } else if (op.kind === 'move') {
+    const el = els.get(op.target);
+    if (el) {
+      el.dataset.dx = +el.dataset.dx + op.dx; el.dataset.dy = +el.dataset.dy + op.dy;
+      el.setAttribute('transform', `translate(${el.dataset.dx},${el.dataset.dy})`);
+    }
+  }
+}
+
+// ---- send ops (follows leader/primary redirects) ----
+async function submit(op) {
+  op.client = cid; op.lamport = ++clock;                  // Lamport send rule
+  let url = base(R);
+  for (let i = 0; i < 3; i++) {
+    const j = await (await fetch(url + '/submit', { method: 'POST', body: JSON.stringify(op) })).json();
+    if (j.redirect) { url = j.redirect; continue; }
+    return j;
+  }
+}
+
+// ---- pointer handling ----
+const pt = e => { const r = board.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+let pts = null, preview = null, dragTarget = null, dragStart = null;
+board.onpointerdown = e => {
+  const id = e.target.dataset?.id;
+  if (tool === 'draw') {
+    pts = [pt(e)];
+    preview = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    preview.setAttribute('stroke', '#bbb'); preview.setAttribute('fill', 'none');
+    board.appendChild(preview);
+  } else if (tool === 'erase' && id) {
+    submit({ kind: 'erase', id: 'o' + Math.random().toString(36).slice(2), target: id });
+  } else if (tool === 'move' && id) {
+    dragTarget = id; dragStart = pt(e);
+  }
+};
+board.onpointermove = e => {
+  if (pts) { pts.push(pt(e)); preview.setAttribute('points', pts.map(p => p.join(',')).join(' ')); }
+};
+board.onpointerup = e => {
+  if (pts) {
+    preview.remove();
+    if (pts.length > 1) submit({ kind: 'draw', id: 's' + Math.random().toString(36).slice(2),
+      shape: { type: 'polyline', points: pts, color: document.getElementById('col').value } });
+    pts = null;
+  } else if (dragTarget) {
+    const p = pt(e);
+    submit({ kind: 'move', id: 'o' + Math.random().toString(36).slice(2), target: dragTarget,
+      dx: p[0] - dragStart[0], dy: p[1] - dragStart[1] });
+    dragTarget = null;
+  }
+};
+</script>
