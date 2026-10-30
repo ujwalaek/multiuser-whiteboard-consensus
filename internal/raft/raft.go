@@ -45,13 +45,15 @@ type Node struct {
 	timeout   time.Duration
 	fast      bool // short election timeout so this node wins first election (demo determinism)
 	done      chan struct{}
+	kick      chan struct{} // signalled when commit advances, so entries apply at once
+	led       []uint64 // terms in which this node became leader (checked for Election Safety)
 }
 
 func New(id string, n int, conns map[string]*grpc.ClientConn, auth *common.Auth, inj *fault.Injector,
 	cb common.CommitFn, fast bool) *Node {
 	nd := &Node{id: id, n: n, conns: conns, auth: auth, inj: inj, onCommit: cb,
 		log: []*pb.LogEntry{{}}, next: map[string]uint64{}, match: map[string]uint64{}, fast: fast,
-		done: make(chan struct{})}
+		done: make(chan struct{}), kick: make(chan struct{}, 1)}
 	nd.resetTimer()
 	return nd
 }
@@ -99,7 +101,7 @@ func (n *Node) tick() {
 	n.mu.Unlock()
 	if st == Leader {
 		n.broadcast() // heartbeat + replication
-	} else if due {
+	} else if due && !n.inj.Equivocating() { // a Byzantine voter never campaigns (Scenario S3)
 		n.startElection()
 	}
 }
@@ -116,7 +118,7 @@ func (n *Node) startElection() {
 	votes := 1
 	for p, c := range n.conns {
 		go func(p string, c *grpc.ClientConn) {
-			if n.inj.Drop() {
+			if n.inj.Drop(p) {
 				return
 			}
 			req := &pb.VoteReq{Term: term, Candidate: n.id, LastIndex: li, LastTerm: lt, Sender: n.id}
@@ -137,6 +139,7 @@ func (n *Node) startElection() {
 				votes++
 				if votes > n.n/2 {
 					n.state, n.leader = Leader, n.id
+					n.led = append(n.led, n.term)
 					for q := range n.conns {
 						n.next[q], n.match[q] = uint64(len(n.log)), 0
 					}
@@ -149,6 +152,9 @@ func (n *Node) startElection() {
 func (n *Node) RequestVote(_ context.Context, r *pb.VoteReq) (*pb.VoteResp, error) {
 	if !n.auth.Verify(r.Sender, r) {
 		return nil, status.Error(codes.Unauthenticated, "bad signature")
+	}
+	if n.inj.Equivocating() { // Byzantine voter: says yes to every candidate, even two in one term
+		return &pb.VoteResp{Term: r.Term, Granted: true}, nil
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -173,7 +179,7 @@ func (n *Node) broadcast() {
 }
 
 func (n *Node) replicate(p string) {
-	if n.inj.Drop() {
+	if n.inj.Drop(p) {
 		return
 	}
 	n.mu.Lock()
@@ -236,6 +242,7 @@ func (n *Node) advanceCommit() { // caller holds mu
 		}
 		if c > n.n/2 {
 			n.commit = idx
+			n.wake()
 			break
 		}
 	}
@@ -244,6 +251,9 @@ func (n *Node) advanceCommit() { // caller holds mu
 func (n *Node) AppendEntries(_ context.Context, r *pb.AppendReq) (*pb.AppendResp, error) {
 	if !n.auth.Verify(r.Sender, r) {
 		return nil, status.Error(codes.Unauthenticated, "bad signature")
+	}
+	if n.inj.Equivocating() { // Byzantine follower: acknowledges every leader's entries
+		return &pb.AppendResp{Term: r.Term, Success: true, MatchIndex: r.PrevIndex + uint64(len(r.Entries))}, nil
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -271,11 +281,30 @@ func (n *Node) AppendEntries(_ context.Context, r *pb.AppendReq) (*pb.AppendResp
 	last := r.PrevIndex + uint64(len(r.Entries))
 	if r.LeaderCommit > n.commit {
 		n.commit = min(r.LeaderCommit, last)
+		n.wake()
 	}
 	return &pb.AppendResp{Term: n.term, Success: true, MatchIndex: last}, nil
 }
 
-func (n *Node) applier() { n.every(20*time.Millisecond, n.apply) }
+// wake tells the applier the commit index moved. caller holds mu; never blocks.
+func (n *Node) wake() {
+	select {
+	case n.kick <- struct{}{}:
+	default:
+	}
+}
+
+// applier applies newly committed entries as soon as the commit index advances.
+func (n *Node) applier() {
+	for {
+		select {
+		case <-n.done:
+			return
+		case <-n.kick:
+			n.apply()
+		}
+	}
+}
 
 func (n *Node) apply() {
 	n.mu.Lock()
@@ -308,9 +337,15 @@ func (n *Node) Propose(op []byte) (string, error) {
 	return n.id, nil
 }
 
+func (n *Node) Leader() (string, bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.leader, n.state == Leader && n.inj.Mode() != fault.Crash
+}
+
 func (n *Node) Status() map[string]any {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return map[string]any{"role": []string{"follower", "candidate", "leader"}[n.state],
-		"term": n.term, "leader": n.leader, "commit": n.commit}
+		"term": n.term, "leader": n.leader, "commit": n.commit, "led": append([]uint64{}, n.led...)}
 }

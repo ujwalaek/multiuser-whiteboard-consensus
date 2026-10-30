@@ -1,0 +1,3 @@
+view from [r1] need=1: 5 shapes drawn, 5 tampered, ignored: none
+view from [r2] need=1: 5 shapes drawn, 0 tampered, ignored: none
+view from [r0,r1,r2,r3] need=2: 5 shapes drawn, 0 tampered, ignored: r1

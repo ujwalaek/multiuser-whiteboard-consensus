@@ -105,12 +105,92 @@ func TestCrashBoundary(t *testing.T) {
 	testnet.Agree(t, rs)
 }
 
+// A minority partition cannot commit; once healed, every replica converges on the majority's log.
+func TestMinorityPartitionCannotCommit(t *testing.T) {
+	ns, rs := cluster(t, 5, 17040)
+	l := waitLeader(t, ns, rs)
+	maj, min := []string{rs[l].ID}, []string{} // leader + 2 others form the majority side
+	for i := range rs {
+		switch {
+		case i == l:
+		case len(maj) < 3:
+			maj = append(maj, rs[i].ID)
+		default:
+			min = append(min, rs[i].ID)
+		}
+	}
+	for _, r := range rs {
+		side := maj
+		if r.ID == min[0] || r.ID == min[1] {
+			side = min
+		}
+		r.Inj.SetPartition(side)
+	}
+	ns[l].Propose(op(1))
+	testnet.Eventually(t, 3*time.Second, "majority commits", func() bool { return committedOn(rs, 1) == 3 })
+	for _, r := range rs {
+		if r.ID == min[0] || r.ID == min[1] {
+			if _, ok := r.Committed()[1]; ok {
+				t.Fatalf("minority replica %s committed during the partition", r.ID)
+			}
+		}
+	}
+	for _, r := range rs {
+		r.Inj.Set(fault.None, 0)
+	}
+	testnet.Eventually(t, 5*time.Second, "minority catches up after healing", func() bool { return committedOn(rs, 1) == 5 })
+	testnet.Agree(t, rs)
+}
+
+// Scenario S3: one Byzantine voter that votes for everyone bridges two partitions,
+// each side elects a leader, and both commit different ops at the same index.
+func TestDoubleVoteTwoLeaders(t *testing.T) {
+	var ns []*Node
+	rs := testnet.Start(t, 5, 17050, func(r *testnet.Replica, conns map[string]*grpc.ClientConn, gs *grpc.Server) {
+		switch r.ID { // partitions in place before anyone can campaign
+		case "r0", "r1":
+			r.Inj.SetPartition([]string{"r0", "r1", "r4"})
+		case "r2", "r3":
+			r.Inj.SetPartition([]string{"r2", "r3", "r4"})
+		case "r4":
+			r.Inj.Set(fault.Equivocate, 0)
+		}
+		nd := New(r.ID, 5, conns, r.Auth, r.Inj, r.OnCommit, false)
+		pb.RegisterRaftServer(gs, nd)
+		ns = append(ns, nd)
+	})
+	for _, nd := range ns {
+		nd.Run()
+		t.Cleanup(nd.Stop)
+	}
+	var a, b int
+	testnet.Eventually(t, 5*time.Second, "a leader on each side", func() bool {
+		la, lb := leaders(ns[:2], rs[:2]), leaders(ns[2:4], rs[2:4])
+		if len(la) == 1 && len(lb) == 1 {
+			a, b = la[0], 2+lb[0]
+			return true
+		}
+		return false
+	})
+	t.Logf("leaders: r%d in term %v, r%d in term %v", a, ns[a].Status()["term"], b, ns[b].Status()["term"])
+	ns[a].Propose(op(1))
+	ns[b].Propose(op(2))
+	testnet.Eventually(t, 3*time.Second, "both leaders commit index 1", func() bool {
+		_, okA := rs[a].Committed()[1]
+		_, okB := rs[b].Committed()[1]
+		return okA && okB
+	})
+	if string(rs[a].Committed()[1]) == string(rs[b].Committed()[1]) {
+		t.Fatal("expected the two leaders to commit different ops at index 1")
+	}
+}
+
 // Scenario S1: an equivocating leader makes honest followers commit different ops at the same index.
 func TestEquivocatingLeaderBreaksSafety(t *testing.T) {
 	ns, rs := cluster(t, 4, 17030)
 	l := waitLeader(t, ns, rs)
 	rs[l].Inj.Set(fault.Equivocate, 0)
-	ns[l].Propose(op(1))
+	ns[l].Propose([]byte("[" + string(op(1)) + "]")) // a batch, as the server's batcher proposes
 	testnet.Eventually(t, 3*time.Second, "index 1 committed on all replicas", func() bool { return committedOn(rs, 1) == 4 })
 
 	seen := map[string]bool{}

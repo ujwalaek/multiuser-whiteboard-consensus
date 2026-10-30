@@ -1,0 +1,2 @@
+skipping Byzantine replica r1
+SAFETY OK: 3 honest replicas agree on all 1404 committed indices

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# usage: scripts/run_cluster.sh raft 5   |   scripts/run_cluster.sh pbft 4
+# usage: scripts/run_cluster.sh raft 5   |   scripts/run_cluster.sh pbft 4 [replica flags...]
+# extra flags go to every replica, e.g. -delay 25ms -batch 1
 set -e
 PROTO=$1; N=$2
 cd "$(dirname "$0")/.."
@@ -7,10 +8,11 @@ cd "$(dirname "$0")/.."
 mkdir -p bin logs
 go build -o bin/replica ./cmd/replica
 go build -o bin/checker ./cmd/checker
+go build -o bin/bench ./cmd/bench
 go run ./cmd/keygen -n $N -dir keys 2>/dev/null   # fresh key pair per replica for every run
 for ((i=0;i<N;i++)); do
   FAST=""; [ "$PROTO" = raft ] && [ $i -eq 0 ] && FAST="-fast"
-  ./bin/replica -id $i -n $N -proto $PROTO $FAST > logs/r$i.log 2>&1 &
+  ./bin/replica -id $i -n $N -proto $PROTO $FAST "${@:3}" > logs/r$i.log 2>&1 &
   echo $! >> logs/pids
 done
 sleep 1

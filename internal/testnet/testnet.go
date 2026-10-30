@@ -2,7 +2,6 @@
 package testnet
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -10,8 +9,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"wb/internal/common"
 	"wb/internal/fault"
@@ -52,15 +49,8 @@ func Start(t *testing.T, n, basePort int, register func(r *Replica, conns map[st
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("r%d", i)
 		r := &Replica{ID: id, Inj: fault.New(), Auth: common.NewAuth(id, privs[id], pubs), log: map[uint64][]byte{}}
-		inj := r.Inj
-		gs := grpc.NewServer(grpc.UnaryInterceptor(
-			func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
-				if inj.Drop() {
-					return nil, status.Error(codes.Unavailable, "fault: dropped")
-				}
-				return h(ctx, req)
-			}))
-		register(r, common.Dial(r.ID, n), gs)
+		gs := grpc.NewServer(common.Inbound(r.Inj))
+		register(r, common.Dial(r.ID, n, r.Inj), gs)
 		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", basePort+i))
 		if err != nil {
 			t.Fatal(err)

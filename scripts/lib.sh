@@ -10,5 +10,5 @@ op() { # op <n> -> a draw op
 }
 fault() { curl -s -X POST "localhost:$((8000+$1))/admin/fault?mode=$2&p=${3:-0}" >/dev/null; } # fault <idx> <mode> [p]
 commit() { curl -s "localhost:8000/admin/status" | jq .commit; }
-statuses() { local s=""; for ((i=0;i<$1;i++)); do s+="r$i=$(curl -s "localhost:$((8000+i))/admin/status" | jq -c '{role,commit,applied}') "; done; echo "$s"; }
+statuses() { local s=""; for ((i=0;i<$1;i++)); do s+="r$i=$(curl -s "localhost:$((8000+i))/admin/status" | jq -c '{role,term,commit}') "; done; echo "$s"; }
 replicas() { local s=""; for ((i=0;i<$1;i++)); do s+="http://localhost:$((8000+i)),"; done; echo "${s%,}"; }

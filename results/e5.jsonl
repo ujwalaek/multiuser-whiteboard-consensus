@@ -1,0 +1,1 @@
+{"bytes_per_op":2745.3120854230706,"clients":8,"label":"pbft, backup r1 equivocating (S2)","max_gap_ms":25,"mean_ms":7.719426048922716,"msgs_per_op":4.973952434881087,"n":4,"ops":6173,"p50_ms":7.248,"p90_ms":9.205,"p99_ms":18.576,"proto":"pbft","throughput":1028.8333333333333,"timeouts":0}

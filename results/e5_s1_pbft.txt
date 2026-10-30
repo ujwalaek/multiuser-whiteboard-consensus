@@ -1,0 +1,6 @@
+before fault: r0={"role":"primary","term":null,"commit":1} r1={"role":"backup","term":null,"commit":1} r2={"role":"backup","term":null,"commit":1} r3={"role":"backup","term":null,"commit":1} 
+after fault:  r0={"role":"primary","term":null,"commit":1} r1={"role":"backup","term":null,"commit":1} r2={"role":"backup","term":null,"commit":1} r3={"role":"backup","term":null,"commit":1} 
+skipping Byzantine replica r0
+SAFETY OK: 3 honest replicas agree on all 1 committed indices
+EQUIVOCATION PROOF VERIFIED: r0 signed two different pre-prepares for view 0 seq 2 (held by r0, r1, r2, r3)
+EQUIVOCATION PROOF VERIFIED: r0 signed two different pre-prepares for view 0 seq 3 (held by r0, r1, r2, r3)

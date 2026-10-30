@@ -1,0 +1,9 @@
+goos: linux
+goarch: amd64
+pkg: wb/internal/common
+cpu: 12th Gen Intel(R) Core(TM) i5-1235U
+BenchmarkEd25519Sign-12      	   31383	     32637 ns/op	     360 B/op	       6 allocs/op
+BenchmarkEd25519Verify-12    	   18879	     69753 ns/op	     272 B/op	       4 allocs/op
+BenchmarkHMAC-12             	  591352	      2105 ns/op	     720 B/op	       9 allocs/op
+PASS
+ok  	wb/internal/common	4.709s

@@ -1,16 +1,15 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"strings"
+	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"wb/internal/common"
 	"wb/internal/fault"
@@ -26,6 +25,11 @@ func main() {
 	proto := flag.String("proto", "raft", "raft|pbft")
 	fast := flag.Bool("fast", false, "raft: short election timeout (wins first election)")
 	keys := flag.String("keys", "keys", "directory written by cmd/keygen")
+	batchMax := flag.Int("batch", 32, "most ops per consensus entry (1 disables batching)")
+	batchWait := flag.Duration("batch-wait", 2*time.Millisecond, "longest the leader holds an op for a batch")
+	startFault := flag.String("fault", "", "fault mode from the start (e.g. equivocate, partition)")
+	peers := flag.String("peers", "", "with -fault partition: comma-separated replicas this one can reach")
+	delay := flag.Duration("delay", 0, "one-way delay added to every message this replica sends")
 	flag.Parse()
 
 	rid := fmt.Sprintf("r%d", *id)
@@ -34,17 +38,17 @@ func main() {
 		log.Fatalf("loading keys (run: go run ./cmd/keygen -n %d): %v", *n, err)
 	}
 	inj := fault.New()
-	srv := &server.Server{ID: rid, Proto: *proto, Inj: inj}
+	srv := &server.Server{ID: rid, Proto: *proto, N: *n, Inj: inj, BatchMax: *batchMax, BatchWait: *batchWait}
 	srv.Init()
-	conns := common.Dial(rid, *n)
-
-	gs := grpc.NewServer(grpc.UnaryInterceptor(
-		func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
-			if inj.Drop() { // inbound crash/omission
-				return nil, status.Error(codes.Unavailable, "fault: dropped")
-			}
-			return h(ctx, req)
-		}))
+	switch {
+	case *startFault == "partition":
+		inj.SetPartition(strings.Split(*peers, ","))
+	case *startFault != "":
+		inj.Set(fault.Mode(*startFault), 0)
+	}
+	inj.SetDelay(*delay)
+	conns := common.Dial(rid, *n, inj)
+	gs := grpc.NewServer(common.Inbound(inj))
 
 	switch *proto {
 	case "raft":

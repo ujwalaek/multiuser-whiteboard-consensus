@@ -3,9 +3,10 @@
 <title>Replicated Whiteboard</title>
 <style>
   body { font-family: sans-serif; margin: 8px }
-  #bar { display: flex; gap: 10px; align-items: center; margin-bottom: 6px }
+  #bar { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; flex-wrap: wrap }
   svg { border: 1px solid #888; width: 100%; height: 70vh; background: #fff; touch-action: none }
   button.on { background: #cde }
+  #warn { color: #b00; font-weight: bold }
 </style>
 <div id="bar">
   <b id="who"></b>
@@ -14,51 +15,62 @@
   <button data-t="move">Move</button>
   <input type="color" id="col" value="#0000ff">
   <span id="info"></span>
+  <span id="warn"></span>
 </div>
 <svg id="board"></svg>
+<script src="board.js"></script>
 <script>
 const R = Number(location.port) - 8000;           // replica this page is served from
 const base = i => `http://${location.hostname}:${8000 + i}`;
 const cid = 'c' + Math.random().toString(36).slice(2, 7);
-const board = document.getElementById('board');
-const els = new Map();
-let clock = 0, tool = 'draw', last = 0;
+const svg = document.getElementById('board');
+const board = new Board(), els = new Map();
+let clock = 0, tool = 'draw', quorum, verifiedBy = '';
 
-document.getElementById('who').textContent = 'replica r' + R;
 document.querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
   tool = b.dataset.t;
   document.querySelectorAll('button[data-t]').forEach(x => x.classList.toggle('on', x === b));
 });
 
-// ---- receive committed ops (the only way the canvas changes) ----
-const ws = new WebSocket(`ws://${location.host}/ws`);
-ws.onmessage = ev => {
-  const e = JSON.parse(ev.data), op = e.op;
-  clock = Math.max(clock, op.lamport || 0) + 1;           // Lamport receive rule
-  if (!e.dup) apply(op);                                  // a retried request is in the ledger once more but drawn once
-  last = e.index;
-  document.getElementById('info').textContent =
-    `committed=${last}  lamport=${clock}  ledger-head=${e.hash.slice(0, 12)}`;
-};
+// ---- receive committed blocks (the only way the canvas changes) ----
+// Raft trusts the replica this page came from. PBFT listens to every replica and
+// draws a block only once f+1 of them sent the same block hash.
+fetch(base(R) + '/admin/status').then(r => r.json()).then(st => {
+  const pbft = st.proto === 'pbft';
+  quorum = new Quorum(pbft ? st.f + 1 : 1);
+  const from = pbft ? [...Array(st.n).keys()] : [R];
+  verifiedBy = pbft ? `needs ${st.f + 1} of ${st.n} replicas to agree` : `trusts r${R}`;
+  document.getElementById('who').textContent = `replica r${R} (${st.proto})`;
+  from.forEach(i => {
+    const ws = new WebSocket(`ws://${location.hostname}:${8000 + i}/ws`);
+    ws.onmessage = ev => quorum.receive(i, JSON.parse(ev.data)).forEach(render);
+  });
+});
 
-function apply(op) {
-  if (op.kind === 'draw') {
-    const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    el.setAttribute('points', op.shape.points.map(p => p.join(',')).join(' '));
-    el.setAttribute('stroke', op.shape.color);
-    el.setAttribute('stroke-width', 3);
-    el.setAttribute('fill', 'none');
-    el.dataset.id = op.id; el.dataset.dx = 0; el.dataset.dy = 0;
-    board.appendChild(el); els.set(op.id, el);
-  } else if (op.kind === 'erase') {
-    els.get(op.target)?.remove(); els.delete(op.target);
-  } else if (op.kind === 'move') {
-    const el = els.get(op.target);
-    if (el) {
-      el.dataset.dx = +el.dataset.dx + op.dx; el.dataset.dy = +el.dataset.dy + op.dy;
-      el.setAttribute('transform', `translate(${el.dataset.dx},${el.dataset.dy})`);
+function render(b) {
+  b.ops.forEach((op, k) => {
+    clock = Math.max(clock, op.lamport || 0) + 1;          // Lamport receive rule
+    if (b.dup && b.dup[k]) return;                         // retried request: drawn once
+    const ch = board.apply(op);
+    if (ch.type === 'add') {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      el.setAttribute('points', op.shape.points.map(p => p.join(',')).join(' '));
+      el.setAttribute('stroke', op.shape.color);
+      el.setAttribute('stroke-width', 3);
+      el.setAttribute('fill', 'none');
+      el.dataset.id = op.id;
+      svg.appendChild(el); els.set(op.id, el);
+    } else if (ch.type === 'remove') {
+      els.get(ch.id)?.remove(); els.delete(ch.id);
+    } else if (ch.type === 'move') {
+      const s = board.shapes.get(ch.id);
+      els.get(ch.id)?.setAttribute('transform', `translate(${s.x},${s.y})`);
     }
-  }
+  });
+  document.getElementById('info').textContent =
+    `block=${b.index}  lamport=${clock}  ledger-head=${b.hash.slice(0, 12)}  (${verifiedBy})`;
+  document.getElementById('warn').textContent = quorum.suspects.size
+    ? 'disagreeing replicas ignored: ' + [...quorum.suspects].map(i => 'r' + i).join(', ') : '';
 }
 
 // ---- send ops (follows leader/primary redirects) ----
@@ -73,34 +85,35 @@ async function submit(op) {
 }
 
 // ---- pointer handling ----
-const pt = e => { const r = board.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+const pt = e => { const r = svg.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+const newId = p => p + Math.random().toString(36).slice(2);
 let pts = null, preview = null, dragTarget = null, dragStart = null;
-board.onpointerdown = e => {
+svg.onpointerdown = e => {
   const id = e.target.dataset?.id;
   if (tool === 'draw') {
     pts = [pt(e)];
     preview = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    preview.setAttribute('stroke', '#bbb'); preview.setAttribute('fill', 'none');
-    board.appendChild(preview);
+    preview.setAttribute('stroke', '#bbb'); preview.setAttribute('fill', 'none');  // tentative until committed
+    svg.appendChild(preview);
   } else if (tool === 'erase' && id) {
-    submit({ kind: 'erase', id: 'o' + Math.random().toString(36).slice(2), target: id });
+    submit({ kind: 'erase', id: newId('o'), target: id });
   } else if (tool === 'move' && id) {
     dragTarget = id; dragStart = pt(e);
   }
 };
-board.onpointermove = e => {
+svg.onpointermove = e => {
   if (pts) { pts.push(pt(e)); preview.setAttribute('points', pts.map(p => p.join(',')).join(' ')); }
 };
-board.onpointerup = e => {
-  if (pts) {
+svg.onpointerup = e => {
+  if (pts) {                                              // one op per stroke, not per point
     preview.remove();
-    if (pts.length > 1) submit({ kind: 'draw', id: 's' + Math.random().toString(36).slice(2),
+    if (pts.length > 1) submit({ kind: 'draw', id: newId('s'),
       shape: { type: 'polyline', points: pts, color: document.getElementById('col').value } });
     pts = null;
-  } else if (dragTarget) {
-    const p = pt(e);
-    submit({ kind: 'move', id: 'o' + Math.random().toString(36).slice(2), target: dragTarget,
-      dx: p[0] - dragStart[0], dy: p[1] - dragStart[1] });
+  } else if (dragTarget) {                                // moves carry the absolute target position
+    const p = pt(e), s = board.shapes.get(dragTarget);
+    submit({ kind: 'move', id: newId('o'), target: dragTarget,
+      x: s.x + p[0] - dragStart[0], y: s.y + p[1] - dragStart[1] });
     dragTarget = null;
   }
 };

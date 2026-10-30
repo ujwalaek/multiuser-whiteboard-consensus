@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,11 +25,15 @@ func get(url string, v any) error {
 }
 
 func check(urls []string) bool {
-	seen := map[uint64]map[string][]string{} // index -> opHash -> replicas
+	seen := map[uint64]map[string][]string{} // index -> Merkle root of the block's ops -> replicas
 	heads := map[uint64]map[string][]string{} // index -> ledger hash -> replicas
 	bad, checked := false, 0
+	ledBy := map[uint64][]string{} // term -> honest replicas that became leader in it
 	for _, u := range urls {
-		var st struct{ ID, Fault string }
+		var st struct {
+			ID, Fault string
+			Led       []uint64
+		}
 		if get(u+"/admin/status", &st) != nil {
 			fmt.Println("unreachable:", u)
 			continue
@@ -39,6 +41,9 @@ func check(urls []string) bool {
 		if st.Fault == "equivocate" {
 			fmt.Println("skipping Byzantine replica", st.ID)
 			continue
+		}
+		for _, t := range st.Led {
+			ledBy[t] = append(ledBy[t], st.ID)
 		}
 		var lg []server.Block
 		if get(u+"/admin/log", &lg) != nil {
@@ -50,8 +55,7 @@ func check(urls []string) bool {
 			fmt.Printf("LEDGER CORRUPT on %s: hash chain breaks at index %d\n", st.ID, i)
 		}
 		for _, e := range lg {
-			h := sha256.Sum256(e.Op)
-			add(seen, e.Index, hex.EncodeToString(h[:4]), st.ID)
+			add(seen, e.Index, e.Merkle[:8], st.ID)
 			add(heads, e.Index, e.Hash[:8], st.ID)
 		}
 	}
@@ -70,6 +74,12 @@ func check(urls []string) bool {
 		if m := heads[uint64(i)]; len(m) > 1 {
 			fmt.Printf("LEDGER FORK from height %d: %v\n", i, m)
 			break
+		}
+	}
+	for t, ids := range ledBy { // Raft only: at most one leader per term
+		if len(ids) > 1 {
+			bad = true
+			fmt.Printf("ELECTION SAFETY VIOLATION: %v were all leader in term %d\n", ids, t)
 		}
 	}
 	if checked == 0 { // nothing to compare is not evidence of safety

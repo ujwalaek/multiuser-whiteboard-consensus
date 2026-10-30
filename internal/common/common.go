@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"wb/internal/fault"
 	"wb/pb"
 )
 
@@ -25,6 +26,8 @@ type CommitFn func(index uint64, op []byte)
 type Consensus interface {
 	// Propose returns a leader hint (e.g. "r2") when ErrNotLeader is returned.
 	Propose(op []byte) (hint string, err error)
+	// Leader reports the replica believed to lead (may be "") and whether it is this one.
+	Leader() (hint string, self bool)
 	Status() map[string]any
 }
 
@@ -51,7 +54,8 @@ type EvidenceSource interface{ Evidence() []Evidence }
 // Num("r3") == 3
 func Num(id string) int { n, _ := strconv.Atoi(id[1:]); return n }
 
-func Dial(self string, n int) map[string]*grpc.ClientConn {
+// Dial opens a connection to every other replica; inj adds delay to what is sent.
+func Dial(self string, n int, inj *fault.Injector) map[string]*grpc.ClientConn {
 	m := map[string]*grpc.ClientConn{}
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("r%d", i)
@@ -59,7 +63,8 @@ func Dial(self string, n int) map[string]*grpc.ClientConn {
 			continue
 		}
 		c, err := grpc.NewClient(fmt.Sprintf("localhost:%d", BasePort+i),
-			grpc.WithTransportCredentials(insecure.NewCredentials()))
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithUnaryInterceptor(outbound(inj)))
 		if err != nil {
 			log.Fatal(err)
 		}

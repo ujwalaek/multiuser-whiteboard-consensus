@@ -103,7 +103,7 @@ func (n *Node) Propose(op []byte) (string, error) {
 	n.mu.Unlock()
 	for p, c := range n.conns {
 		go func(p string, c *grpc.ClientConn) {
-			if n.inj.Drop() {
+			if n.inj.Drop(p) {
 				return
 			}
 			o := op
@@ -171,7 +171,7 @@ func (n *Node) phase(m *pb.PhaseMsg, prepare bool) (*pb.Ack, error) {
 func (n *Node) bcast(prepare bool, seq uint64, d []byte, proof *pb.PrePrepareMsg) {
 	for p, c := range n.conns {
 		go func(p string, c *grpc.ClientConn) {
-			if n.inj.Drop() {
+			if n.inj.Drop(p) {
 				return
 			}
 			m := &pb.PhaseMsg{View: n.view, Seq: seq, Digest: n.digestFor(p, d), Sender: n.id, Proof: proof}
@@ -261,6 +261,10 @@ func (n *Node) advance(seq uint64) {
 		}
 		n.applyMu.Unlock()
 	}
+}
+
+func (n *Node) Leader() (string, bool) {
+	return n.primary, n.id == n.primary && n.inj.Mode() != fault.Crash
 }
 
 func (n *Node) Status() map[string]any {
