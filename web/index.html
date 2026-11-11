@@ -48,7 +48,7 @@ fetch(base(R) + '/admin/status').then(r => r.json()).then(st => {
   document.getElementById('who').textContent = `replica r${R} (${st.proto})`;
   from.forEach(i => {
     const ws = new WebSocket(`ws://${location.hostname}:${8000 + i}/ws`);
-    ws.onmessage = ev => quorum.receive(i, JSON.parse(ev.data)).forEach(render);
+    ws.onmessage = ev => { quorum.receive(i, JSON.parse(ev.data)).forEach(render); showSuspects(); };
   });
 });
 
@@ -74,6 +74,11 @@ function render(b) {
   });
   document.getElementById('info').textContent =
     `block=${b.index}  lamport=${clock}  ledger-head=${b.hash.slice(0, 12)}  (${verifiedBy})`;
+}
+
+// A liar's block usually arrives after the honest ones were released, so the warning is
+// refreshed on every message, not only when a block is drawn.
+function showSuspects() {
   document.getElementById('warn').textContent = quorum.suspects.size
     ? 'disagreeing replicas ignored: ' + [...quorum.suspects].map(i => 'r' + i).join(', ') : '';
 }

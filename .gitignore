@@ -3,3 +3,5 @@ logs/
 keys/
 results_eval.log
 data/
+docker-compose.yml
+results_docker.log

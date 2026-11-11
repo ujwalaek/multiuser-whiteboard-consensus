@@ -1,0 +1,2 @@
+{"bytes_per_op":38749.304,"clients":4,"label":"docker: leader container killed at 3s","max_gap_ms":1299,"mean_ms":22.933033527696796,"msgs_per_op":0.8523636363636363,"n":5,"ops":1372,"p50_ms":17.157,"p90_ms":23.229,"p99_ms":49.664,"proto":"raft","throughput":171.5,"timeouts":0}
+{"bytes_per_op":14141.749367088607,"clients":4,"label":"docker: leader container killed at 3s","max_gap_ms":849,"mean_ms":26.587009322033943,"msgs_per_op":16.137552742616034,"n":4,"ops":1180,"p50_ms":18.642,"p90_ms":37.553,"p99_ms":91.46,"proto":"pbft","throughput":147.5,"timeouts":0}

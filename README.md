@@ -31,6 +31,7 @@ From `scripts/eval.sh` on one laptop (details and plots in `results/`):
 - **Failover (E3, median of 5):** a crashed Raft leader froze the board for 692 ms; a crashed PBFT primary for 768 ms (view change); a crashed PBFT backup made no difference.
 - **Signatures (E6, E7):** Ed25519 costs 21 µs to sign and 47 µs to verify per message, against 1 µs for HMAC; on the running cluster that is +23% median latency at 4 replicas and +27% at 7.
 - **Durability (E8):** fsyncing Raft's term, vote and log before every reply raises median latency from 5.1 to 13.1 ms.
+- **In Docker (one replica per container):** with the leader's container killed, the board froze for 1,299 ms (Raft) and 849 ms (PBFT). With real kernel delay (`tc netem` on every container, so the commit sent back to the client is delayed too), a stroke stays under 100 ms up to about 30 ms of delay with Raft and 22 ms with PBFT (`results/docker_e*.jsonl`).
 
 ![scaling](results/e1_scaling.png)
 ![delay](results/e2_delay.png)
@@ -78,11 +79,12 @@ view changes.
 One replica per container (real network delay with `tc netem`, real crashes with
 `docker kill`): `scripts/docker_cluster.sh pbft 4`, `scripts/docker_delay.sh 25ms`,
 `scripts/docker_eval.sh`. Docker Desktop must be running; set `DOCKER` to `docker.exe`'s
-path if its WSL integration is off. These scripts have not been run yet.
+path if its WSL integration is off.
 
 ## Limitations
 
-- Every replica runs on one laptop, so latency at larger N includes CPU contention.
+- Every replica runs on one laptop (in processes or containers), so latency at larger N
+  includes CPU contention; runs on separate machines remain.
 - Only Raft persists its state; a PBFT replica that restarts rejoins by state transfer
   from its peers rather than from disk.
 - The real-time order check covers each client's own requests; there is no full
