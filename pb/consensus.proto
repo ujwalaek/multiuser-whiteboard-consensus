@@ -24,7 +24,15 @@ service Pbft {
   rpc PrePrepare(PrePrepareMsg) returns (Ack);
   rpc Prepare(PhaseMsg) returns (Ack);
   rpc Commit(PhaseMsg) returns (Ack);
+  rpc Checkpoint(CheckpointMsg) returns (Ack);
+  rpc ViewChange(ViewChangeMsg) returns (Ack);
+  rpc NewView(NewViewMsg) returns (Ack);
+  rpc Fetch(FetchReq) returns (FetchResp);
 }
+// State transfer: a replica behind the others asks for committed entries [from, to] and
+// accepts each one only when f+1 replicas return the same request.
+message FetchReq { uint64 from = 1; uint64 to = 2; string sender = 3; bytes sig = 4; }
+message FetchResp { repeated PrePrepareMsg entries = 1; }
 message PrePrepareMsg {
   uint64 view = 1; uint64 seq = 2; bytes digest = 3; bytes op = 4; string sender = 5; bytes sig = 6;
 }
@@ -33,5 +41,19 @@ message PhaseMsg {
   // On a prepare: the primary's signed pre-prepare this replica received, so peers
   // holding a different one for the same (view, seq) can prove the primary equivocated.
   PrePrepareMsg proof = 6;
+}
+// Sent after executing every checkpoint-interval-th entry; 2f+1 matching ones make the
+// state up to seq stable, so older slots are dropped and a view change starts above it.
+message CheckpointMsg { uint64 seq = 1; bytes digest = 2; string sender = 3; bytes sig = 4; }
+// A pre-prepare plus 2f matching prepares from distinct backups of the same view.
+message PreparedCert { PrePrepareMsg pre = 1; repeated PhaseMsg prepares = 2; }
+message ViewChangeMsg {
+  uint64 view = 1; uint64 stable_seq = 2; repeated CheckpointMsg checkpoint = 3;
+  repeated PreparedCert prepared = 4; string sender = 5; bytes sig = 6;
+}
+// The new primary's proof (2f+1 view changes) and the pre-prepares it re-issues from them.
+message NewViewMsg {
+  uint64 view = 1; repeated ViewChangeMsg view_changes = 2; repeated PrePrepareMsg pre_prepares = 3;
+  string sender = 4; bytes sig = 5;
 }
 message Ack {}

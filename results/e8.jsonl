@@ -1,0 +1,2 @@
+{"bytes_per_op":1569.7746228926353,"clients":8,"label":"persist=none","max_gap_ms":11,"mean_ms":5.19395253936573,"msgs_per_op":0.6539485359361136,"n":5,"ops":9018,"p50_ms":5.099,"p90_ms":6.053,"p99_ms":8.109,"proto":"raft","throughput":1503,"timeouts":0}
+{"bytes_per_op":2591.983574610245,"clients":8,"label":"persist=data","max_gap_ms":12,"mean_ms":13.235821458507928,"msgs_per_op":1.1347438752783965,"n":5,"ops":3579,"p50_ms":13.056,"p90_ms":15.914,"p99_ms":18.277,"proto":"raft","throughput":596.5,"timeouts":0}

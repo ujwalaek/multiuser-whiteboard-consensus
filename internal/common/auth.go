@@ -2,7 +2,9 @@ package common
 
 import (
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,10 +23,31 @@ type Auth struct {
 	self string
 	priv ed25519.PrivateKey
 	pubs map[string]ed25519.PublicKey
+	mac  []byte // set by UseHMAC: one key shared by every replica instead of signatures
+}
+
+// UseHMAC switches to HMAC-SHA256 with a key every replica shares: what the project used
+// before signatures, kept to measure what signatures cost on the running cluster. Any
+// replica could have produced any message, so equivocation proof is no longer possible.
+func (a *Auth) UseHMAC(key []byte) { a.mac = key }
+
+// LoadHMACKey reads the shared key keygen wrote to dir/hmac.key.
+func LoadHMACKey(dir string) ([]byte, error) {
+	b, err := os.ReadFile(filepath.Join(dir, "hmac.key"))
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(string(b))
+}
+
+func (a *Auth) tag(m proto.Message) []byte {
+	h := hmac.New(sha256.New, a.mac)
+	h.Write(signedBytes(m))
+	return h.Sum(nil)
 }
 
 func NewAuth(self string, priv ed25519.PrivateKey, pubs map[string]ed25519.PublicKey) *Auth {
-	return &Auth{self, priv, pubs}
+	return &Auth{self: self, priv: priv, pubs: pubs}
 }
 
 // GenerateKeys makes a key pair for each of replicas r0..r(n-1).
@@ -56,7 +79,12 @@ func WriteKeys(dir string, privs map[string]ed25519.PrivateKey, pubs map[string]
 		hp[id] = hex.EncodeToString(k)
 	}
 	b, _ := json.MarshalIndent(hp, "", "  ")
-	return os.WriteFile(filepath.Join(dir, "pub.json"), b, 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "pub.json"), b, 0o644); err != nil {
+		return err
+	}
+	mac := make([]byte, 32) // the shared key for -auth hmac
+	rand.Read(mac)
+	return os.WriteFile(filepath.Join(dir, "hmac.key"), []byte(hex.EncodeToString(mac)), 0o600)
 }
 
 // LoadAuth reads this replica's private key and every replica's public key from dir.
@@ -112,11 +140,18 @@ func signedBytes(m proto.Message) []byte {
 
 // Sign sets m's sig field to this replica's signature over the rest of m.
 func (a *Auth) Sign(m proto.Message) {
+	if a.mac != nil {
+		m.ProtoReflect().Set(sigField(m), protoreflect.ValueOfBytes(a.tag(m)))
+		return
+	}
 	m.ProtoReflect().Set(sigField(m), protoreflect.ValueOfBytes(ed25519.Sign(a.priv, signedBytes(m))))
 }
 
 // Verify reports whether m carries a valid signature by sender.
 func (a *Auth) Verify(sender string, m proto.Message) bool {
+	if a.mac != nil {
+		return hmac.Equal(a.tag(m), m.ProtoReflect().Get(sigField(m)).Bytes())
+	}
 	pub, ok := a.pubs[sender]
 	if !ok {
 		return false

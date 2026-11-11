@@ -1,6 +1,10 @@
 before fault: r0={"role":"leader","term":1,"commit":1} r1={"role":"follower","term":1,"commit":1} r2={"role":"follower","term":1,"commit":1} r3={"role":"follower","term":1,"commit":1} 
 after fault:  r0={"role":"leader","term":1,"commit":3} r1={"role":"follower","term":1,"commit":3} r2={"role":"follower","term":1,"commit":3} r3={"role":"follower","term":1,"commit":3} 
 skipping Byzantine replica r0
-SAFETY VIOLATION at index 2: honest replicas disagree: map[4d32933a:[r2] 59dc3f67:[r1 r3]]
-SAFETY VIOLATION at index 3: honest replicas disagree: map[64265d30:[r2] b1ffd409:[r1 r3]]
-LEDGER FORK from height 2: map[729c98f8:[r2] 7332b665:[r1 r3]]
+VALIDITY VIOLATION on r1 at index 2: 71e7118f…/s2 is not what its client signed
+VALIDITY VIOLATION on r1 at index 3: 71e7118f…/s3 is not what its client signed
+VALIDITY VIOLATION on r3 at index 2: 71e7118f…/s2 is not what its client signed
+VALIDITY VIOLATION on r3 at index 3: 71e7118f…/s3 is not what its client signed
+SAFETY VIOLATION at index 2: honest replicas disagree: map[6ac7fc85:[r2] b6acacdd:[r1 r3]]
+SAFETY VIOLATION at index 3: honest replicas disagree: map[7e40f388:[r2] 7e5a371f:[r1 r3]]
+LEDGER FORK from height 2: map[0c70b294:[r1 r3] 862d1c35:[r2]]

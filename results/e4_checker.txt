@@ -1,1 +1,2 @@
 SAFETY OK: 5 honest replicas agree on all 20 committed indices
+PROPERTIES OK: validity, no duplicates, real-time order, log matching

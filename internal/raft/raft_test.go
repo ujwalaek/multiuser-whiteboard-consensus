@@ -43,7 +43,9 @@ func waitLeader(t *testing.T, ns []*Node, rs []*testnet.Replica) int {
 	return l[0]
 }
 
-func op(i int) []byte { return []byte(fmt.Sprintf(`{"kind":"draw","id":"s%d","shape":{"color":"#0000ff"}}`, i)) }
+func op(i int) []byte {
+	return []byte(fmt.Sprintf(`{"kind":"draw","id":"s%d","shape":{"color":"#0000ff"}}`, i))
+}
 
 func committedOn(rs []*testnet.Replica, idx uint64) int {
 	c := 0

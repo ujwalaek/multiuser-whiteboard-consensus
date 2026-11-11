@@ -162,6 +162,10 @@ const (
 	Pbft_PrePrepare_FullMethodName = "/wb.Pbft/PrePrepare"
 	Pbft_Prepare_FullMethodName    = "/wb.Pbft/Prepare"
 	Pbft_Commit_FullMethodName     = "/wb.Pbft/Commit"
+	Pbft_Checkpoint_FullMethodName = "/wb.Pbft/Checkpoint"
+	Pbft_ViewChange_FullMethodName = "/wb.Pbft/ViewChange"
+	Pbft_NewView_FullMethodName    = "/wb.Pbft/NewView"
+	Pbft_Fetch_FullMethodName      = "/wb.Pbft/Fetch"
 )
 
 // PbftClient is the client API for Pbft service.
@@ -171,6 +175,10 @@ type PbftClient interface {
 	PrePrepare(ctx context.Context, in *PrePrepareMsg, opts ...grpc.CallOption) (*Ack, error)
 	Prepare(ctx context.Context, in *PhaseMsg, opts ...grpc.CallOption) (*Ack, error)
 	Commit(ctx context.Context, in *PhaseMsg, opts ...grpc.CallOption) (*Ack, error)
+	Checkpoint(ctx context.Context, in *CheckpointMsg, opts ...grpc.CallOption) (*Ack, error)
+	ViewChange(ctx context.Context, in *ViewChangeMsg, opts ...grpc.CallOption) (*Ack, error)
+	NewView(ctx context.Context, in *NewViewMsg, opts ...grpc.CallOption) (*Ack, error)
+	Fetch(ctx context.Context, in *FetchReq, opts ...grpc.CallOption) (*FetchResp, error)
 }
 
 type pbftClient struct {
@@ -211,6 +219,46 @@ func (c *pbftClient) Commit(ctx context.Context, in *PhaseMsg, opts ...grpc.Call
 	return out, nil
 }
 
+func (c *pbftClient) Checkpoint(ctx context.Context, in *CheckpointMsg, opts ...grpc.CallOption) (*Ack, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Pbft_Checkpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pbftClient) ViewChange(ctx context.Context, in *ViewChangeMsg, opts ...grpc.CallOption) (*Ack, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Pbft_ViewChange_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pbftClient) NewView(ctx context.Context, in *NewViewMsg, opts ...grpc.CallOption) (*Ack, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, Pbft_NewView_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *pbftClient) Fetch(ctx context.Context, in *FetchReq, opts ...grpc.CallOption) (*FetchResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FetchResp)
+	err := c.cc.Invoke(ctx, Pbft_Fetch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PbftServer is the server API for Pbft service.
 // All implementations must embed UnimplementedPbftServer
 // for forward compatibility.
@@ -218,6 +266,10 @@ type PbftServer interface {
 	PrePrepare(context.Context, *PrePrepareMsg) (*Ack, error)
 	Prepare(context.Context, *PhaseMsg) (*Ack, error)
 	Commit(context.Context, *PhaseMsg) (*Ack, error)
+	Checkpoint(context.Context, *CheckpointMsg) (*Ack, error)
+	ViewChange(context.Context, *ViewChangeMsg) (*Ack, error)
+	NewView(context.Context, *NewViewMsg) (*Ack, error)
+	Fetch(context.Context, *FetchReq) (*FetchResp, error)
 	mustEmbedUnimplementedPbftServer()
 }
 
@@ -236,6 +288,18 @@ func (UnimplementedPbftServer) Prepare(context.Context, *PhaseMsg) (*Ack, error)
 }
 func (UnimplementedPbftServer) Commit(context.Context, *PhaseMsg) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method Commit not implemented")
+}
+func (UnimplementedPbftServer) Checkpoint(context.Context, *CheckpointMsg) (*Ack, error) {
+	return nil, status.Error(codes.Unimplemented, "method Checkpoint not implemented")
+}
+func (UnimplementedPbftServer) ViewChange(context.Context, *ViewChangeMsg) (*Ack, error) {
+	return nil, status.Error(codes.Unimplemented, "method ViewChange not implemented")
+}
+func (UnimplementedPbftServer) NewView(context.Context, *NewViewMsg) (*Ack, error) {
+	return nil, status.Error(codes.Unimplemented, "method NewView not implemented")
+}
+func (UnimplementedPbftServer) Fetch(context.Context, *FetchReq) (*FetchResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method Fetch not implemented")
 }
 func (UnimplementedPbftServer) mustEmbedUnimplementedPbftServer() {}
 func (UnimplementedPbftServer) testEmbeddedByValue()              {}
@@ -312,6 +376,78 @@ func _Pbft_Commit_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Pbft_Checkpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckpointMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PbftServer).Checkpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Pbft_Checkpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PbftServer).Checkpoint(ctx, req.(*CheckpointMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Pbft_ViewChange_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ViewChangeMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PbftServer).ViewChange(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Pbft_ViewChange_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PbftServer).ViewChange(ctx, req.(*ViewChangeMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Pbft_NewView_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NewViewMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PbftServer).NewView(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Pbft_NewView_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PbftServer).NewView(ctx, req.(*NewViewMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Pbft_Fetch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FetchReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PbftServer).Fetch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Pbft_Fetch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PbftServer).Fetch(ctx, req.(*FetchReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Pbft_ServiceDesc is the grpc.ServiceDesc for Pbft service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -330,6 +466,22 @@ var Pbft_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Commit",
 			Handler:    _Pbft_Commit_Handler,
+		},
+		{
+			MethodName: "Checkpoint",
+			Handler:    _Pbft_Checkpoint_Handler,
+		},
+		{
+			MethodName: "ViewChange",
+			Handler:    _Pbft_ViewChange_Handler,
+		},
+		{
+			MethodName: "NewView",
+			Handler:    _Pbft_NewView_Handler,
+		},
+		{
+			MethodName: "Fetch",
+			Handler:    _Pbft_Fetch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

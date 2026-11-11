@@ -6,9 +6,11 @@ PROTO=$1; N=$2
 cd "$(dirname "$0")/.."
 ./scripts/stop.sh
 mkdir -p bin logs
+rm -rf data logs/submitted.jsonl   # state from an earlier run
 go build -o bin/replica ./cmd/replica
 go build -o bin/checker ./cmd/checker
 go build -o bin/bench ./cmd/bench
+go build -o bin/sign ./cmd/sign
 go run ./cmd/keygen -n $N -dir keys 2>/dev/null   # fresh key pair per replica for every run
 for ((i=0;i<N;i++)); do
   FAST=""; [ "$PROTO" = raft ] && [ $i -eq 0 ] && FAST="-fast"

@@ -70,3 +70,27 @@ func TestEvidenceCheck(t *testing.T) {
 		t.Fatal("evidence pinned on the wrong replica")
 	}
 }
+
+// With -auth hmac every replica shares one key: messages still verify and tampering is
+// caught, but a tag proves nothing to a third party, since any key holder could make it.
+func TestHMACMode(t *testing.T) {
+	privs, pubs := GenerateKeys(2)
+	key := make([]byte, 32)
+	a, b := NewAuth("r0", privs["r0"], pubs), NewAuth("r1", privs["r1"], pubs)
+	a.UseHMAC(key)
+	b.UseHMAC(key)
+	m := &pb.PhaseMsg{Seq: 1, Sender: "r0"}
+	a.Sign(m)
+	if !b.Verify("r0", m) {
+		t.Fatal("HMAC-tagged message does not verify")
+	}
+	m.Seq = 2
+	if b.Verify("r0", m) {
+		t.Error("a tampered message verifies")
+	}
+	forged := &pb.PhaseMsg{Seq: 3, Sender: "r0"}
+	b.Sign(forged) // r1 makes a message "from" r0
+	if !a.Verify("r0", forged) {
+		t.Error("expected HMAC to accept a forgery by another key holder (that is its weakness)")
+	}
+}

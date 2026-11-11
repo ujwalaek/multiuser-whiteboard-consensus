@@ -2,3 +2,4 @@ bin/
 logs/
 keys/
 results_eval.log
+data/

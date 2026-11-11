@@ -21,6 +21,17 @@ var ErrNotLeader = errors.New("not leader")
 // BasePort is replica i's gRPC port minus i (tests move it to avoid clashing with a running cluster).
 var BasePort = 7000
 
+// Addrs, when set, is every replica's gRPC address in order (one container or machine
+// each); otherwise replica i is at localhost:BasePort+i.
+var Addrs []string
+
+func addr(i int) string {
+	if i < len(Addrs) {
+		return Addrs[i]
+	}
+	return fmt.Sprintf("localhost:%d", BasePort+i)
+}
+
 type CommitFn func(index uint64, op []byte)
 
 type Consensus interface {
@@ -48,6 +59,9 @@ func (e Evidence) Check(a *Auth) bool {
 		a.Verify(e.Accused, e.A) && a.Verify(e.Accused, e.B)
 }
 
+// Suspecter is implemented by protocols that can replace a leader they suspect is faulty (PBFT view change).
+type Suspecter interface{ Suspect() }
+
 // EvidenceSource is implemented by protocols that collect equivocation evidence.
 type EvidenceSource interface{ Evidence() []Evidence }
 
@@ -62,7 +76,7 @@ func Dial(self string, n int, inj *fault.Injector) map[string]*grpc.ClientConn {
 		if id == self {
 			continue
 		}
-		c, err := grpc.NewClient(fmt.Sprintf("localhost:%d", BasePort+i),
+		c, err := grpc.NewClient(addr(i),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(outbound(inj)))
 		if err != nil {

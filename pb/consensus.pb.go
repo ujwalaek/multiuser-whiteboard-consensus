@@ -369,6 +369,120 @@ func (x *AppendResp) GetMatchIndex() uint64 {
 	return 0
 }
 
+// State transfer: a replica behind the others asks for committed entries [from, to] and
+// accepts each one only when f+1 replicas return the same request.
+type FetchReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	From          uint64                 `protobuf:"varint,1,opt,name=from,proto3" json:"from,omitempty"`
+	To            uint64                 `protobuf:"varint,2,opt,name=to,proto3" json:"to,omitempty"`
+	Sender        string                 `protobuf:"bytes,3,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,4,opt,name=sig,proto3" json:"sig,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchReq) Reset() {
+	*x = FetchReq{}
+	mi := &file_pb_consensus_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchReq) ProtoMessage() {}
+
+func (x *FetchReq) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchReq.ProtoReflect.Descriptor instead.
+func (*FetchReq) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *FetchReq) GetFrom() uint64 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *FetchReq) GetTo() uint64 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
+func (x *FetchReq) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *FetchReq) GetSig() []byte {
+	if x != nil {
+		return x.Sig
+	}
+	return nil
+}
+
+type FetchResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*PrePrepareMsg       `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchResp) Reset() {
+	*x = FetchResp{}
+	mi := &file_pb_consensus_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchResp) ProtoMessage() {}
+
+func (x *FetchResp) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchResp.ProtoReflect.Descriptor instead.
+func (*FetchResp) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *FetchResp) GetEntries() []*PrePrepareMsg {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
 type PrePrepareMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	View          uint64                 `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
@@ -383,7 +497,7 @@ type PrePrepareMsg struct {
 
 func (x *PrePrepareMsg) Reset() {
 	*x = PrePrepareMsg{}
-	mi := &file_pb_consensus_proto_msgTypes[5]
+	mi := &file_pb_consensus_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -395,7 +509,7 @@ func (x *PrePrepareMsg) String() string {
 func (*PrePrepareMsg) ProtoMessage() {}
 
 func (x *PrePrepareMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_consensus_proto_msgTypes[5]
+	mi := &file_pb_consensus_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +522,7 @@ func (x *PrePrepareMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrePrepareMsg.ProtoReflect.Descriptor instead.
 func (*PrePrepareMsg) Descriptor() ([]byte, []int) {
-	return file_pb_consensus_proto_rawDescGZIP(), []int{5}
+	return file_pb_consensus_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PrePrepareMsg) GetView() uint64 {
@@ -469,7 +583,7 @@ type PhaseMsg struct {
 
 func (x *PhaseMsg) Reset() {
 	*x = PhaseMsg{}
-	mi := &file_pb_consensus_proto_msgTypes[6]
+	mi := &file_pb_consensus_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -481,7 +595,7 @@ func (x *PhaseMsg) String() string {
 func (*PhaseMsg) ProtoMessage() {}
 
 func (x *PhaseMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_consensus_proto_msgTypes[6]
+	mi := &file_pb_consensus_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -494,7 +608,7 @@ func (x *PhaseMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhaseMsg.ProtoReflect.Descriptor instead.
 func (*PhaseMsg) Descriptor() ([]byte, []int) {
-	return file_pb_consensus_proto_rawDescGZIP(), []int{6}
+	return file_pb_consensus_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PhaseMsg) GetView() uint64 {
@@ -539,6 +653,290 @@ func (x *PhaseMsg) GetProof() *PrePrepareMsg {
 	return nil
 }
 
+// Sent after executing every checkpoint-interval-th entry; 2f+1 matching ones make the
+// state up to seq stable, so older slots are dropped and a view change starts above it.
+type CheckpointMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	Digest        []byte                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
+	Sender        string                 `protobuf:"bytes,3,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,4,opt,name=sig,proto3" json:"sig,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckpointMsg) Reset() {
+	*x = CheckpointMsg{}
+	mi := &file_pb_consensus_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckpointMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckpointMsg) ProtoMessage() {}
+
+func (x *CheckpointMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckpointMsg.ProtoReflect.Descriptor instead.
+func (*CheckpointMsg) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CheckpointMsg) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *CheckpointMsg) GetDigest() []byte {
+	if x != nil {
+		return x.Digest
+	}
+	return nil
+}
+
+func (x *CheckpointMsg) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *CheckpointMsg) GetSig() []byte {
+	if x != nil {
+		return x.Sig
+	}
+	return nil
+}
+
+// A pre-prepare plus 2f matching prepares from distinct backups of the same view.
+type PreparedCert struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pre           *PrePrepareMsg         `protobuf:"bytes,1,opt,name=pre,proto3" json:"pre,omitempty"`
+	Prepares      []*PhaseMsg            `protobuf:"bytes,2,rep,name=prepares,proto3" json:"prepares,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreparedCert) Reset() {
+	*x = PreparedCert{}
+	mi := &file_pb_consensus_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreparedCert) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreparedCert) ProtoMessage() {}
+
+func (x *PreparedCert) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreparedCert.ProtoReflect.Descriptor instead.
+func (*PreparedCert) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PreparedCert) GetPre() *PrePrepareMsg {
+	if x != nil {
+		return x.Pre
+	}
+	return nil
+}
+
+func (x *PreparedCert) GetPrepares() []*PhaseMsg {
+	if x != nil {
+		return x.Prepares
+	}
+	return nil
+}
+
+type ViewChangeMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	View          uint64                 `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
+	StableSeq     uint64                 `protobuf:"varint,2,opt,name=stable_seq,json=stableSeq,proto3" json:"stable_seq,omitempty"`
+	Checkpoint    []*CheckpointMsg       `protobuf:"bytes,3,rep,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	Prepared      []*PreparedCert        `protobuf:"bytes,4,rep,name=prepared,proto3" json:"prepared,omitempty"`
+	Sender        string                 `protobuf:"bytes,5,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,6,opt,name=sig,proto3" json:"sig,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ViewChangeMsg) Reset() {
+	*x = ViewChangeMsg{}
+	mi := &file_pb_consensus_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ViewChangeMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ViewChangeMsg) ProtoMessage() {}
+
+func (x *ViewChangeMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ViewChangeMsg.ProtoReflect.Descriptor instead.
+func (*ViewChangeMsg) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ViewChangeMsg) GetView() uint64 {
+	if x != nil {
+		return x.View
+	}
+	return 0
+}
+
+func (x *ViewChangeMsg) GetStableSeq() uint64 {
+	if x != nil {
+		return x.StableSeq
+	}
+	return 0
+}
+
+func (x *ViewChangeMsg) GetCheckpoint() []*CheckpointMsg {
+	if x != nil {
+		return x.Checkpoint
+	}
+	return nil
+}
+
+func (x *ViewChangeMsg) GetPrepared() []*PreparedCert {
+	if x != nil {
+		return x.Prepared
+	}
+	return nil
+}
+
+func (x *ViewChangeMsg) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *ViewChangeMsg) GetSig() []byte {
+	if x != nil {
+		return x.Sig
+	}
+	return nil
+}
+
+// The new primary's proof (2f+1 view changes) and the pre-prepares it re-issues from them.
+type NewViewMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	View          uint64                 `protobuf:"varint,1,opt,name=view,proto3" json:"view,omitempty"`
+	ViewChanges   []*ViewChangeMsg       `protobuf:"bytes,2,rep,name=view_changes,json=viewChanges,proto3" json:"view_changes,omitempty"`
+	PrePrepares   []*PrePrepareMsg       `protobuf:"bytes,3,rep,name=pre_prepares,json=prePrepares,proto3" json:"pre_prepares,omitempty"`
+	Sender        string                 `protobuf:"bytes,4,opt,name=sender,proto3" json:"sender,omitempty"`
+	Sig           []byte                 `protobuf:"bytes,5,opt,name=sig,proto3" json:"sig,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NewViewMsg) Reset() {
+	*x = NewViewMsg{}
+	mi := &file_pb_consensus_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NewViewMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NewViewMsg) ProtoMessage() {}
+
+func (x *NewViewMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_consensus_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NewViewMsg.ProtoReflect.Descriptor instead.
+func (*NewViewMsg) Descriptor() ([]byte, []int) {
+	return file_pb_consensus_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *NewViewMsg) GetView() uint64 {
+	if x != nil {
+		return x.View
+	}
+	return 0
+}
+
+func (x *NewViewMsg) GetViewChanges() []*ViewChangeMsg {
+	if x != nil {
+		return x.ViewChanges
+	}
+	return nil
+}
+
+func (x *NewViewMsg) GetPrePrepares() []*PrePrepareMsg {
+	if x != nil {
+		return x.PrePrepares
+	}
+	return nil
+}
+
+func (x *NewViewMsg) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *NewViewMsg) GetSig() []byte {
+	if x != nil {
+		return x.Sig
+	}
+	return nil
+}
+
 type Ack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -547,7 +945,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_pb_consensus_proto_msgTypes[7]
+	mi := &file_pb_consensus_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +957,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_consensus_proto_msgTypes[7]
+	mi := &file_pb_consensus_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +970,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_pb_consensus_proto_rawDescGZIP(), []int{7}
+	return file_pb_consensus_proto_rawDescGZIP(), []int{13}
 }
 
 var File_pb_consensus_proto protoreflect.FileDescriptor
@@ -609,7 +1007,14 @@ const file_pb_consensus_proto_rawDesc = "" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x1f\n" +
 	"\vmatch_index\x18\x03 \x01(\x04R\n" +
-	"matchIndex\"\x87\x01\n" +
+	"matchIndex\"X\n" +
+	"\bFetchReq\x12\x12\n" +
+	"\x04from\x18\x01 \x01(\x04R\x04from\x12\x0e\n" +
+	"\x02to\x18\x02 \x01(\x04R\x02to\x12\x16\n" +
+	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x10\n" +
+	"\x03sig\x18\x04 \x01(\fR\x03sig\"8\n" +
+	"\tFetchResp\x12+\n" +
+	"\aentries\x18\x01 \x03(\v2\x11.wb.PrePrepareMsgR\aentries\"\x87\x01\n" +
 	"\rPrePrepareMsg\x12\x12\n" +
 	"\x04view\x18\x01 \x01(\x04R\x04view\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12\x16\n" +
@@ -623,16 +1028,47 @@ const file_pb_consensus_proto_rawDesc = "" +
 	"\x06digest\x18\x03 \x01(\fR\x06digest\x12\x16\n" +
 	"\x06sender\x18\x04 \x01(\tR\x06sender\x12\x10\n" +
 	"\x03sig\x18\x05 \x01(\fR\x03sig\x12'\n" +
-	"\x05proof\x18\x06 \x01(\v2\x11.wb.PrePrepareMsgR\x05proof\"\x05\n" +
+	"\x05proof\x18\x06 \x01(\v2\x11.wb.PrePrepareMsgR\x05proof\"c\n" +
+	"\rCheckpointMsg\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x16\n" +
+	"\x06digest\x18\x02 \x01(\fR\x06digest\x12\x16\n" +
+	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x10\n" +
+	"\x03sig\x18\x04 \x01(\fR\x03sig\"]\n" +
+	"\fPreparedCert\x12#\n" +
+	"\x03pre\x18\x01 \x01(\v2\x11.wb.PrePrepareMsgR\x03pre\x12(\n" +
+	"\bprepares\x18\x02 \x03(\v2\f.wb.PhaseMsgR\bprepares\"\xcd\x01\n" +
+	"\rViewChangeMsg\x12\x12\n" +
+	"\x04view\x18\x01 \x01(\x04R\x04view\x12\x1d\n" +
+	"\n" +
+	"stable_seq\x18\x02 \x01(\x04R\tstableSeq\x121\n" +
+	"\n" +
+	"checkpoint\x18\x03 \x03(\v2\x11.wb.CheckpointMsgR\n" +
+	"checkpoint\x12,\n" +
+	"\bprepared\x18\x04 \x03(\v2\x10.wb.PreparedCertR\bprepared\x12\x16\n" +
+	"\x06sender\x18\x05 \x01(\tR\x06sender\x12\x10\n" +
+	"\x03sig\x18\x06 \x01(\fR\x03sig\"\xb6\x01\n" +
+	"\n" +
+	"NewViewMsg\x12\x12\n" +
+	"\x04view\x18\x01 \x01(\x04R\x04view\x124\n" +
+	"\fview_changes\x18\x02 \x03(\v2\x11.wb.ViewChangeMsgR\vviewChanges\x124\n" +
+	"\fpre_prepares\x18\x03 \x03(\v2\x11.wb.PrePrepareMsgR\vprePrepares\x12\x16\n" +
+	"\x06sender\x18\x04 \x01(\tR\x06sender\x12\x10\n" +
+	"\x03sig\x18\x05 \x01(\fR\x03sig\"\x05\n" +
 	"\x03Ack2`\n" +
 	"\x04Raft\x12(\n" +
 	"\vRequestVote\x12\v.wb.VoteReq\x1a\f.wb.VoteResp\x12.\n" +
-	"\rAppendEntries\x12\r.wb.AppendReq\x1a\x0e.wb.AppendResp2s\n" +
+	"\rAppendEntries\x12\r.wb.AppendReq\x1a\x0e.wb.AppendResp2\x91\x02\n" +
 	"\x04Pbft\x12(\n" +
 	"\n" +
 	"PrePrepare\x12\x11.wb.PrePrepareMsg\x1a\a.wb.Ack\x12 \n" +
 	"\aPrepare\x12\f.wb.PhaseMsg\x1a\a.wb.Ack\x12\x1f\n" +
-	"\x06Commit\x12\f.wb.PhaseMsg\x1a\a.wb.AckB\aZ\x05wb/pbb\x06proto3"
+	"\x06Commit\x12\f.wb.PhaseMsg\x1a\a.wb.Ack\x12(\n" +
+	"\n" +
+	"Checkpoint\x12\x11.wb.CheckpointMsg\x1a\a.wb.Ack\x12(\n" +
+	"\n" +
+	"ViewChange\x12\x11.wb.ViewChangeMsg\x1a\a.wb.Ack\x12\"\n" +
+	"\aNewView\x12\x0e.wb.NewViewMsg\x1a\a.wb.Ack\x12$\n" +
+	"\x05Fetch\x12\f.wb.FetchReq\x1a\r.wb.FetchRespB\aZ\x05wb/pbb\x06proto3"
 
 var (
 	file_pb_consensus_proto_rawDescOnce sync.Once
@@ -646,35 +1082,56 @@ func file_pb_consensus_proto_rawDescGZIP() []byte {
 	return file_pb_consensus_proto_rawDescData
 }
 
-var file_pb_consensus_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_pb_consensus_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_pb_consensus_proto_goTypes = []any{
 	(*LogEntry)(nil),      // 0: wb.LogEntry
 	(*VoteReq)(nil),       // 1: wb.VoteReq
 	(*VoteResp)(nil),      // 2: wb.VoteResp
 	(*AppendReq)(nil),     // 3: wb.AppendReq
 	(*AppendResp)(nil),    // 4: wb.AppendResp
-	(*PrePrepareMsg)(nil), // 5: wb.PrePrepareMsg
-	(*PhaseMsg)(nil),      // 6: wb.PhaseMsg
-	(*Ack)(nil),           // 7: wb.Ack
+	(*FetchReq)(nil),      // 5: wb.FetchReq
+	(*FetchResp)(nil),     // 6: wb.FetchResp
+	(*PrePrepareMsg)(nil), // 7: wb.PrePrepareMsg
+	(*PhaseMsg)(nil),      // 8: wb.PhaseMsg
+	(*CheckpointMsg)(nil), // 9: wb.CheckpointMsg
+	(*PreparedCert)(nil),  // 10: wb.PreparedCert
+	(*ViewChangeMsg)(nil), // 11: wb.ViewChangeMsg
+	(*NewViewMsg)(nil),    // 12: wb.NewViewMsg
+	(*Ack)(nil),           // 13: wb.Ack
 }
 var file_pb_consensus_proto_depIdxs = []int32{
-	0, // 0: wb.AppendReq.entries:type_name -> wb.LogEntry
-	5, // 1: wb.PhaseMsg.proof:type_name -> wb.PrePrepareMsg
-	1, // 2: wb.Raft.RequestVote:input_type -> wb.VoteReq
-	3, // 3: wb.Raft.AppendEntries:input_type -> wb.AppendReq
-	5, // 4: wb.Pbft.PrePrepare:input_type -> wb.PrePrepareMsg
-	6, // 5: wb.Pbft.Prepare:input_type -> wb.PhaseMsg
-	6, // 6: wb.Pbft.Commit:input_type -> wb.PhaseMsg
-	2, // 7: wb.Raft.RequestVote:output_type -> wb.VoteResp
-	4, // 8: wb.Raft.AppendEntries:output_type -> wb.AppendResp
-	7, // 9: wb.Pbft.PrePrepare:output_type -> wb.Ack
-	7, // 10: wb.Pbft.Prepare:output_type -> wb.Ack
-	7, // 11: wb.Pbft.Commit:output_type -> wb.Ack
-	7, // [7:12] is the sub-list for method output_type
-	2, // [2:7] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0,  // 0: wb.AppendReq.entries:type_name -> wb.LogEntry
+	7,  // 1: wb.FetchResp.entries:type_name -> wb.PrePrepareMsg
+	7,  // 2: wb.PhaseMsg.proof:type_name -> wb.PrePrepareMsg
+	7,  // 3: wb.PreparedCert.pre:type_name -> wb.PrePrepareMsg
+	8,  // 4: wb.PreparedCert.prepares:type_name -> wb.PhaseMsg
+	9,  // 5: wb.ViewChangeMsg.checkpoint:type_name -> wb.CheckpointMsg
+	10, // 6: wb.ViewChangeMsg.prepared:type_name -> wb.PreparedCert
+	11, // 7: wb.NewViewMsg.view_changes:type_name -> wb.ViewChangeMsg
+	7,  // 8: wb.NewViewMsg.pre_prepares:type_name -> wb.PrePrepareMsg
+	1,  // 9: wb.Raft.RequestVote:input_type -> wb.VoteReq
+	3,  // 10: wb.Raft.AppendEntries:input_type -> wb.AppendReq
+	7,  // 11: wb.Pbft.PrePrepare:input_type -> wb.PrePrepareMsg
+	8,  // 12: wb.Pbft.Prepare:input_type -> wb.PhaseMsg
+	8,  // 13: wb.Pbft.Commit:input_type -> wb.PhaseMsg
+	9,  // 14: wb.Pbft.Checkpoint:input_type -> wb.CheckpointMsg
+	11, // 15: wb.Pbft.ViewChange:input_type -> wb.ViewChangeMsg
+	12, // 16: wb.Pbft.NewView:input_type -> wb.NewViewMsg
+	5,  // 17: wb.Pbft.Fetch:input_type -> wb.FetchReq
+	2,  // 18: wb.Raft.RequestVote:output_type -> wb.VoteResp
+	4,  // 19: wb.Raft.AppendEntries:output_type -> wb.AppendResp
+	13, // 20: wb.Pbft.PrePrepare:output_type -> wb.Ack
+	13, // 21: wb.Pbft.Prepare:output_type -> wb.Ack
+	13, // 22: wb.Pbft.Commit:output_type -> wb.Ack
+	13, // 23: wb.Pbft.Checkpoint:output_type -> wb.Ack
+	13, // 24: wb.Pbft.ViewChange:output_type -> wb.Ack
+	13, // 25: wb.Pbft.NewView:output_type -> wb.Ack
+	6,  // 26: wb.Pbft.Fetch:output_type -> wb.FetchResp
+	18, // [18:27] is the sub-list for method output_type
+	9,  // [9:18] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_pb_consensus_proto_init() }
@@ -688,7 +1145,7 @@ func file_pb_consensus_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_consensus_proto_rawDesc), len(file_pb_consensus_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

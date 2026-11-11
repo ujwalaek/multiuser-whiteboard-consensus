@@ -1,6 +1,6 @@
-leaders: r0={"role":"leader","term":1,"commit":0} r1={"role":"follower","term":1,"commit":0} r2={"role":"leader","term":1,"commit":0} r3={"role":"follower","term":1,"commit":0} r4={"role":"follower","term":0,"commit":0} 
+leaders: r0={"role":"follower","term":2,"commit":0} r1={"role":"leader","term":2,"commit":0} r2={"role":"follower","term":2,"commit":0} r3={"role":"leader","term":2,"commit":0} r4={"role":"follower","term":0,"commit":0} 
 skipping Byzantine replica r4
-SAFETY VIOLATION at index 1: honest replicas disagree: map[4cf79af0:[r0 r1] 4d32933a:[r2 r3]]
-SAFETY VIOLATION at index 2: honest replicas disagree: map[64265d30:[r2 r3] e048dcc3:[r0 r1]]
-LEDGER FORK from height 1: map[c5cdf180:[r2 r3] f4233c4a:[r0 r1]]
-ELECTION SAFETY VIOLATION: [r0 r2] were all leader in term 1
+SAFETY VIOLATION at index 1: honest replicas disagree: map[4637cdf9:[r0 r1] 6ac7fc85:[r2 r3]]
+SAFETY VIOLATION at index 2: honest replicas disagree: map[7e40f388:[r2 r3] a01aa17c:[r0 r1]]
+LEDGER FORK from height 1: map[c637192b:[r0 r1] fc8b87f3:[r2 r3]]
+ELECTION SAFETY VIOLATION: [r1 r3] were all leader in term 2

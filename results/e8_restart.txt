@@ -1,0 +1,5 @@
+5 strokes:          r0={"role":"leader","term":1,"commit":5} r1={"role":"follower","term":1,"commit":5} r2={"role":"follower","term":1,"commit":5} 
+r2 killed, back:    r0={"role":"leader","term":1,"commit":7} r1={"role":"follower","term":1,"commit":7} r2={"role":"follower","term":1,"commit":7} 
+all killed, back:   r0={"role":"follower","term":3,"commit":8} r1={"role":"follower","term":3,"commit":8} r2={"role":"leader","term":3,"commit":8} 
+SAFETY OK: 3 honest replicas agree on all 8 committed indices
+PROPERTIES OK: validity, no duplicates, real-time order, log matching

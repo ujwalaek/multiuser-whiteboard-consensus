@@ -28,10 +28,26 @@ type Server struct {
 	seen      map[string]bool // client/id of every applied request, for deduplication
 	subs      map[*websocket.Conn]bool
 	batch     *batcher
+	watch     map[string]*watched // requests a client sent here although this replica is not the primary
 }
 
+// A client that gets no answer from the primary sends its request to every replica. A
+// backup cannot order it, but it watches it: if the request is not executed within
+// watchTimeout, the primary is suspected (PBFT view change), and whichever replica
+// becomes primary proposes the requests it is watching.
+type watched struct {
+	op       []byte
+	since    time.Time
+	proposed bool
+}
+
+const watchTimeout = 500 * time.Millisecond
+
 func (s *Server) Init() {
-	s.subs, s.seen = map[*websocket.Conn]bool{}, map[string]bool{}
+	s.subs, s.seen, s.watch = map[*websocket.Conn]bool{}, map[string]bool{}, map[string]*watched{}
+	if s.Proto == "pbft" {
+		go s.watchLoop()
+	}
 	s.batch = newBatcher(s.BatchMax, s.BatchWait, func(entry []byte) error {
 		_, err := s.Cons.Propose(entry)
 		return err
@@ -147,7 +163,15 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if s.Proto == "pbft" && !common.VerifyRequest(body) { // PBFT orders only client-signed requests
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"request not signed by its client"}`))
+		return
+	}
 	hint, self := s.Cons.Leader()
+	if !self && s.Proto == "pbft" {
+		s.watchReq(body)
+	}
 	switch {
 	case self && s.batch.submit(body) == nil:
 		w.Write([]byte(`{"ok":true}`))
@@ -156,6 +180,58 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(503)
 		w.Write([]byte(`{"error":"no leader available"}`))
+	}
+}
+
+func reqKey(op []byte) string {
+	var req struct{ Client, ID string }
+	if json.Unmarshal(op, &req) != nil || req.ID == "" {
+		return ""
+	}
+	return req.Client + "/" + req.ID
+}
+
+func (s *Server) watchReq(op []byte) {
+	k := reqKey(op)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if k != "" && !s.seen[k] && s.watch[k] == nil {
+		s.watch[k] = &watched{op: op, since: time.Now()}
+	}
+}
+
+// watchLoop drops executed requests from the watch list, proposes the rest once this
+// replica is primary, and suspects the primary when one has waited too long.
+func (s *Server) watchLoop() {
+	last := ""
+	for range time.Tick(100 * time.Millisecond) {
+		leader, self := s.Cons.Leader()
+		var propose [][]byte
+		overdue := false
+		s.mu.Lock()
+		for k, w := range s.watch {
+			if leader != last { // a new primary gets a full timeout to propose what it was sent
+				w.since = time.Now()
+			}
+			switch {
+			case s.seen[k]:
+				delete(s.watch, k)
+			case self && !w.proposed:
+				w.proposed = true
+				propose = append(propose, w.op)
+			case !self && time.Since(w.since) > watchTimeout:
+				overdue = true
+				w.since = time.Now() // the view change has its own timer from here
+			}
+		}
+		last = leader
+		s.mu.Unlock()
+		for _, op := range propose {
+			go s.batch.submit(op)
+		}
+		if sp, ok := s.Cons.(common.Suspecter); ok && overdue {
+			sp.Suspect()
+		}
 	}
 }
 

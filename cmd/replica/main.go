@@ -30,12 +30,25 @@ func main() {
 	startFault := flag.String("fault", "", "fault mode from the start (e.g. equivocate, partition)")
 	peers := flag.String("peers", "", "with -fault partition: comma-separated replicas this one can reach")
 	delay := flag.Duration("delay", 0, "one-way delay added to every message this replica sends")
+	data := flag.String("data", "", "raft: keep term, vote and log under this directory (restored on restart)")
+	authMode := flag.String("auth", "ed25519", "ed25519 (per-replica signatures) | hmac (one shared key, for comparison)")
+	addrs := flag.String("addrs", "", "every replica's gRPC host:port in order (default localhost:7000+i)")
 	flag.Parse()
 
 	rid := fmt.Sprintf("r%d", *id)
 	auth, err := common.LoadAuth(*keys, rid)
 	if err != nil {
 		log.Fatalf("loading keys (run: go run ./cmd/keygen -n %d): %v", *n, err)
+	}
+	if *authMode == "hmac" {
+		k, err := common.LoadHMACKey(*keys)
+		if err != nil {
+			log.Fatalf("loading the shared HMAC key: %v", err)
+		}
+		auth.UseHMAC(k)
+	}
+	if *addrs != "" {
+		common.Addrs = strings.Split(*addrs, ",")
 	}
 	inj := fault.New()
 	srv := &server.Server{ID: rid, Proto: *proto, N: *n, Inj: inj, BatchMax: *batchMax, BatchWait: *batchWait}
@@ -53,12 +66,19 @@ func main() {
 	switch *proto {
 	case "raft":
 		nd := raft.New(rid, *n, conns, auth, inj, srv.OnCommit, *fast)
+		if *data != "" {
+			if err := nd.Persist(fmt.Sprintf("%s/%s", *data, rid)); err != nil {
+				log.Fatal(err)
+			}
+		}
 		pb.RegisterRaftServer(gs, nd)
 		srv.Cons = nd
 		nd.Run()
 	case "pbft":
 		nd := pbft.New(rid, *n, conns, auth, inj, srv.OnCommit)
+		nd.Valid = common.ValidBatch // backups accept only requests their clients signed
 		pb.RegisterPbftServer(gs, nd)
+		nd.Run()
 		srv.Cons = nd
 	default:
 		log.Fatal("unknown proto")

@@ -3,6 +3,7 @@ package raft
 import (
 	"context"
 	"errors"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -24,12 +25,12 @@ const (
 
 type Node struct {
 	pb.UnimplementedRaftServer
-	mu    sync.Mutex
-	id    string
-	n     int
-	conns map[string]*grpc.ClientConn
-	auth  *common.Auth
-	inj   *fault.Injector
+	mu       sync.Mutex
+	id       string
+	n        int
+	conns    map[string]*grpc.ClientConn
+	auth     *common.Auth
+	inj      *fault.Injector
 	onCommit common.CommitFn
 
 	term      uint64
@@ -46,7 +47,8 @@ type Node struct {
 	fast      bool // short election timeout so this node wins first election (demo determinism)
 	done      chan struct{}
 	kick      chan struct{} // signalled when commit advances, so entries apply at once
-	led       []uint64 // terms in which this node became leader (checked for Election Safety)
+	led       []uint64      // terms in which this node became leader (checked for Election Safety)
+	st        *store        // nil: state lives in memory only
 }
 
 func New(id string, n int, conns map[string]*grpc.ClientConn, auth *common.Auth, inj *fault.Injector,
@@ -56,6 +58,43 @@ func New(id string, n int, conns map[string]*grpc.ClientConn, auth *common.Auth,
 		done: make(chan struct{}), kick: make(chan struct{}, 1)}
 	nd.resetTimer()
 	return nd
+}
+
+// Persist keeps term, vote and log in dir and restores whatever a previous run left
+// there. Call it before Run.
+func (n *Node) Persist(dir string) error {
+	st, m, entries, err := openStore(dir)
+	if err != nil {
+		return err
+	}
+	n.st, n.term, n.votedFor = st, m.Term, m.VotedFor
+	n.log = append([]*pb.LogEntry{{}}, entries...)
+	return nil
+}
+
+// saveMeta writes term and vote to disk. caller holds mu.
+func (n *Node) saveMeta() {
+	if n.st != nil {
+		if err := n.st.saveMeta(meta{n.term, n.votedFor}); err != nil {
+			log.Fatalf("raft: saving term and vote: %v", err) // continuing could mean voting twice
+		}
+	}
+}
+
+// saveLog writes log entries to disk: appended ones, or the whole log after a truncation. caller holds mu.
+func (n *Node) saveLog(added []*pb.LogEntry, truncated bool) {
+	if n.st == nil {
+		return
+	}
+	var err error
+	if truncated {
+		err = n.st.rewrite(n.log[1:])
+	} else {
+		err = n.st.append(added)
+	}
+	if err != nil {
+		log.Fatalf("raft: saving log: %v", err)
+	}
 }
 
 func (n *Node) resetTimer() { // caller holds mu (or is constructor)
@@ -68,6 +107,7 @@ func (n *Node) resetTimer() { // caller holds mu (or is constructor)
 
 func (n *Node) stepDown(term uint64) { // caller holds mu
 	n.term, n.state, n.votedFor = term, Follower, ""
+	n.saveMeta()
 	n.resetTimer()
 }
 
@@ -110,6 +150,7 @@ func (n *Node) startElection() {
 	n.mu.Lock()
 	n.state, n.votedFor = Candidate, n.id
 	n.term++
+	n.saveMeta()
 	n.resetTimer()
 	term, li := n.term, uint64(len(n.log)-1)
 	lt := n.log[li].Term
@@ -167,6 +208,7 @@ func (n *Node) RequestVote(_ context.Context, r *pb.VoteReq) (*pb.VoteResp, erro
 	ok := r.Term == n.term && (n.votedFor == "" || n.votedFor == r.Candidate) && upToDate
 	if ok {
 		n.votedFor = r.Candidate
+		n.saveMeta()
 		n.resetTimer()
 	}
 	return &pb.VoteResp{Term: n.term, Granted: ok}, nil
@@ -262,22 +304,28 @@ func (n *Node) AppendEntries(_ context.Context, r *pb.AppendReq) (*pb.AppendResp
 	}
 	if r.Term > n.term {
 		n.term, n.votedFor = r.Term, ""
+		n.saveMeta()
 	}
 	n.state, n.leader = Follower, r.Leader
 	n.resetTimer()
 	if r.PrevIndex >= uint64(len(n.log)) || n.log[r.PrevIndex].Term != r.PrevTerm {
 		return &pb.AppendResp{Term: n.term}, nil
 	}
+	var added []*pb.LogEntry
+	truncated := false
 	for i, e := range r.Entries {
 		idx := r.PrevIndex + 1 + uint64(i)
 		if idx < uint64(len(n.log)) {
 			if n.log[idx].Term != e.Term { // conflict: truncate (term check only -- this is why Raft is blind to equivocation)
 				n.log = append(n.log[:idx], e)
+				truncated = true
 			}
 		} else {
 			n.log = append(n.log, e)
+			added = append(added, e)
 		}
 	}
+	n.saveLog(added, truncated) // on disk before the leader is told it is
 	last := r.PrevIndex + uint64(len(r.Entries))
 	if r.LeaderCommit > n.commit {
 		n.commit = min(r.LeaderCommit, last)
@@ -331,7 +379,9 @@ func (n *Node) Propose(op []byte) (string, error) {
 		n.mu.Unlock()
 		return h, common.ErrNotLeader
 	}
-	n.log = append(n.log, &pb.LogEntry{Term: n.term, Op: op})
+	e := &pb.LogEntry{Term: n.term, Op: op}
+	n.log = append(n.log, e)
+	n.saveLog([]*pb.LogEntry{e}, false)
 	n.mu.Unlock()
 	n.broadcast()
 	return n.id, nil

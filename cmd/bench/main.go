@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"wb/internal/common"
 )
 
 type status struct {
@@ -81,6 +83,7 @@ func main() {
 	crashAfter := flag.Duration("crash-after", 0, "crash the leader this long into the run (0: never)")
 	label := flag.String("label", "", "free-form tag stored with the result")
 	out := flag.String("out", "", "append the JSON result to this file")
+	sentLog := flag.String("log", "logs/submitted.jsonl", "append every op sent here, for the checker (empty: off)")
 	flag.Parse()
 
 	var l int
@@ -128,10 +131,44 @@ func main() {
 		}
 	}()
 
+	var sentMu sync.Mutex
+	var sentF *os.File
+	if *sentLog != "" {
+		if sentF, err = os.OpenFile(*sentLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err != nil {
+			log.Fatal(err)
+		}
+		defer sentF.Close()
+	}
+	record := func(body []byte, after string) { // after: the request this client saw commit just before
+		if sentF != nil {
+			line, _ := json.Marshal(map[string]any{"op": json.RawMessage(body), "after": after})
+			sentMu.Lock()
+			sentF.Write(append(line, '\n'))
+			sentMu.Unlock()
+		}
+	}
+
 	var target atomic.Int64 // replica currently believed to lead
 	target.Store(int64(l))
+	broadcast := func(body []byte) bool { // the primary did not take it: tell every replica
+		ok := false
+		for i := 0; i < *n; i++ {
+			r, err := httpc.Post(url(i)+"/submit", "application/json", strings.NewReader(string(body)))
+			if err != nil {
+				continue
+			}
+			var res struct{ OK bool }
+			json.NewDecoder(r.Body).Decode(&res)
+			r.Body.Close()
+			ok = ok || res.OK
+		}
+		return ok
+	}
 	submit := func(body []byte) bool {
 		for try := 0; try < 20; try++ {
+			if try == 2 && broadcast(body) {
+				return true
+			}
 			r, err := httpc.Post(url(int(target.Load()))+"/submit", "application/json", strings.NewReader(string(body)))
 			if err == nil {
 				var res struct {
@@ -175,21 +212,37 @@ func main() {
 		wg.Add(1)
 		go func(c int) {
 			defer wg.Done()
+			prev := "" // last request of this client known to have committed
+			key, cid := common.NewClientKey()
 			for k := 0; time.Now().Before(stop); k++ {
 				id := fmt.Sprintf("b%d-%d-%d", c, k, start.UnixNano())
-				body, _ := json.Marshal(map[string]any{"kind": "draw", "id": id, "client": fmt.Sprintf("bench%d", c),
+				body, _ := json.Marshal(map[string]any{"kind": "draw", "id": id, "client": cid,
 					"lamport": k, "shape": map[string]any{"type": "polyline", "color": "#0000ff",
 						"points": [][2]int{{10 * c, k % 500}, {10*c + 40, k%500 + 30}, {10*c + 80, k % 500}}}})
+				body = common.SignRequest(key, body)
+				record(body, prev)
+				prev = ""
 				ch := make(chan struct{})
 				mu.Lock()
 				waiting[id] = ch
 				mu.Unlock()
 				t0 := time.Now()
+				// Wait for the commit, re-sending the same request every 500 ms (its id makes a
+				// second copy harmless): an op accepted by a leader that then crashed is lost, and
+				// a real client retries rather than waiting out a long timeout.
 				ok := submit(body)
-				select {
-				case <-ch:
-				case <-time.After(3 * time.Second):
-					ok = false
+				giveUp := time.After(3 * time.Second)
+			wait:
+				for {
+					select {
+					case <-ch:
+						break wait
+					case <-time.After(500 * time.Millisecond):
+						go submit(body)
+					case <-giveUp:
+						ok = false
+						break wait
+					}
 				}
 				if !ok {
 					timeouts.Add(1)
@@ -198,6 +251,7 @@ func main() {
 					mu.Unlock()
 					continue
 				}
+				prev = cid + "/" + id
 				if t0.After(measureFrom) && time.Now().Before(stop) {
 					mu.Lock()
 					lat = append(lat, float64(time.Since(t0).Microseconds())/1000)

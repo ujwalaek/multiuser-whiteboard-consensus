@@ -4,8 +4,8 @@
 # elects its own leader with r4's vote and commits different ops at the same index.
 # Expected: ELECTION SAFETY VIOLATION (usually) and SAFETY VIOLATION + LEDGER FORK.
 cd "$(dirname "$0")/.."; source scripts/lib.sh
-./scripts/stop.sh; mkdir -p bin logs
-go build -o bin/replica ./cmd/replica && go build -o bin/checker ./cmd/checker
+./scripts/stop.sh; mkdir -p bin logs; rm -f logs/submitted.jsonl
+go build -o bin/replica ./cmd/replica && go build -o bin/checker ./cmd/checker && go build -o bin/sign ./cmd/sign
 go run ./cmd/keygen -n 5 -dir keys 2>/dev/null
 start() { ./bin/replica -id $1 -n 5 -proto raft "${@:2}" > logs/r$1.log 2>&1 & echo $! >> logs/pids; }
 start 0 -fault partition -peers r0,r1,r4
