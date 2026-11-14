@@ -79,12 +79,4 @@ One replica per container (real network delay with `tc netem`, real crashes with
 `docker kill`): `scripts/docker_cluster.sh pbft 4`, `scripts/docker_delay.sh 25ms`,
 `scripts/docker_eval.sh`. Docker Desktop must be running; set `DOCKER` to `docker.exe`'s
 path if its WSL integration is off.
-
-## Limitations
-
-- Every replica runs on one laptop (in processes or containers), so latency at larger N
-  includes CPU contention; runs on separate machines remain.
-- Only Raft persists its state; a PBFT replica that restarts rejoins by state transfer
-  from its peers rather than from disk.
-- The real-time order check covers each client's own requests; there is no full
-  linearizability checker such as Porcupine.
+ 
