@@ -22,8 +22,7 @@ CS23B030, Ujwala.
 | a replica is killed (SIGKILL) and restarted | rejoins from its fsynced term, vote and log | a lagging replica catches up by state transfer |
 
 ## Key results
-
-From `scripts/eval.sh` on one laptop (details and plots in `results/`):
+ 
 
 - **Message cost (E1):** Raft sends n-1 messages per operation; PBFT sends (n-1) + (n-1)² + n(n-1), measured as 24.4, 86 and 186 for 4, 7 and 10 replicas (predicted 24, 84, 180; checkpoints add the rest). Batching up to 32 strokes cuts PBFT's cost 2.3–3.8×.
 - **Latency (E1):** PBFT's median commit latency rose from 17.5 ms at 4 replicas to 94 ms at 10; Raft stayed under 7 ms up to 7.
